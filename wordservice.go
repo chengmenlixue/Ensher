@@ -3,10 +3,12 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/wailsapp/wails/v3/pkg/application"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -95,7 +97,102 @@ func (w *WordService) migrate() error {
 	return nil
 }
 
-// Review settings (stored alongside AI settings)
+// ExportWords opens a save dialog and exports all words as JSON.
+// Returns the saved file path or an error.
+func (w *WordService) ExportWords() (string, error) {
+	words, err := w.GetAllWords()
+	if err != nil {
+		return "", fmt.Errorf("failed to get words: %w", err)
+	}
+	if len(words) == 0 {
+		return "", errors.New("no words to export")
+	}
+
+	path, err := app.Dialog.SaveFileWithOptions(&application.SaveFileDialogOptions{
+		Title:     "Export Words",
+		Filename:  "ensher-words.json",
+		Filters: []application.FileFilter{{DisplayName: "JSON", Pattern: "*.json"}},
+	}).PromptForSingleSelection()
+	if err != nil || path == "" {
+		return "", nil // user cancelled
+	}
+
+	type exportWord struct {
+		Word         string `json:"word"`
+		Phonetic     string `json:"phonetic"`
+		Definition   string `json:"definition"`
+		DefinitionZh string `json:"definitionZh"`
+		Example      string `json:"example"`
+		Notes        string `json:"notes"`
+		Tags         string `json:"tags"`
+	}
+	export := make([]exportWord, len(words))
+	for i, word := range words {
+		export[i] = exportWord{
+			Word:         word.Word,
+			Phonetic:     word.Phonetic,
+			Definition:   word.Definition,
+			DefinitionZh: word.DefinitionZh,
+			Example:      word.Example,
+			Notes:        word.Notes,
+			Tags:         word.Tags,
+		}
+	}
+
+	data, err := json.MarshalIndent(export, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %w", err)
+	}
+	return path, nil
+}
+
+// ImportWords opens a file dialog and imports words from JSON.
+// Returns the number of words imported or an error.
+func (w *WordService) ImportWords() (int, error) {
+	path, err := app.Dialog.OpenFile().
+		SetTitle("Import Words").
+		AddFilter("JSON", "*.json").
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return 0, nil // user cancelled
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	type importWord struct {
+		Word         string `json:"word"`
+		Phonetic     string `json:"phonetic"`
+		Definition   string `json:"definition"`
+		DefinitionZh string `json:"definitionZh"`
+		Example      string `json:"example"`
+		Notes        string `json:"notes"`
+		Tags         string `json:"tags"`
+	}
+	var words []importWord
+	if err := json.Unmarshal(data, &words); err != nil {
+		return 0, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	imported := 0
+	for _, word := range words {
+		if word.Word == "" {
+			continue
+		}
+		_, err := w.AddWord(word.Word, word.Phonetic, word.Definition,
+			word.DefinitionZh, word.Example, word.Notes, word.Tags)
+		if err != nil {
+			continue
+		}
+		imported++
+	}
+	return imported, nil
+}
 
 func reviewSettingsPath() (string, error) {
 	home, err := os.UserHomeDir()

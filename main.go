@@ -10,11 +10,13 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+var app *application.App
+
 func main() {
 	wordService := NewWordService()
 	aiService := &AIService{}
 
-	app := application.New(application.Options{
+	app = application.New(application.Options{
 		Name:        "ensher",
 		Description: "English vocabulary builder for daily learning",
 		Services: []application.Service{

@@ -13,6 +13,7 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
   const [modelName, setModelName] = useState('M2-her');
   const [dailyLimit, setDailyLimit] = useState(20);
   const [saving, setSaving] = useState(false);
+  const [ioWorking, setIoWorking] = useState(false);
   const [msg, setMsg] = useState(null);
   const [showKey, setShowKey] = useState(false);
 
@@ -131,6 +132,54 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
               <span className="badge badge-emerald text-emerald-700 w-10 justify-center text-center">{dailyLimit}</span>
             </div>
             <p className="text-[11px] text-gray-400 mt-1.5">每次复习的单词数量，建议 15–30</p>
+          </div>
+
+          <div className="border-t border-gray-200/50" />
+
+          {/* Data management */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">Data</h3>
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  setIoWorking(true);
+                  setMsg(null);
+                  try {
+                    const path = await WordService.ExportWords();
+                    if (path) setMsg({ type: 'ok', text: `Exported to ${path}` });
+                    else setMsg({ type: 'ok', text: 'Export cancelled' });
+                    setTimeout(() => setMsg(null), 3500);
+                  } catch (err) {
+                    setMsg({ type: 'err', text: 'Export failed: ' + err.message });
+                  }
+                  setIoWorking(false);
+                }}
+                disabled={ioWorking}
+                className="btn btn-soft flex-1 py-3 text-sm font-semibold"
+              >
+                导出 JSON
+              </button>
+              <button
+                onClick={async () => {
+                  setIoWorking(true);
+                  setMsg(null);
+                  try {
+                    const count = await WordService.ImportWords();
+                    if (count > 0) setMsg({ type: 'ok', text: `Imported ${count} word${count > 1 ? 's' : ''}` });
+                    else setMsg({ type: 'ok', text: 'Import cancelled or empty' });
+                    setTimeout(() => setMsg(null), 3500);
+                  } catch (err) {
+                    setMsg({ type: 'err', text: 'Import failed: ' + err.message });
+                  }
+                  setIoWorking(false);
+                }}
+                disabled={ioWorking}
+                className="btn btn-soft flex-1 py-3 text-sm font-semibold"
+              >
+                导入 JSON
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-2">Export saves all words as JSON; import reads and adds words from a JSON file.</p>
           </div>
 
           {msg && (

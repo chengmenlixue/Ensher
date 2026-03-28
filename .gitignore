@@ -1,0 +1,27 @@
+# Build outputs
+bin/
+build/darwin/universal/ensher.app
+build/darwin/arm64/ensher.app
+build/darwin/amd64/ensher.app
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+frontend/bindings/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local settings (contains API keys — NEVER commit)
+ensher.json
+
+# Go
+.task/
+*.exe

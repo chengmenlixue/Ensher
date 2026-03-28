@@ -2,6 +2,10 @@
 
 A macOS desktop app for daily English vocabulary learning with spaced-repetition review and AI-powered features.
 
+![Dashboard](screenshot-dashboard.png)
+![My Words](screenshot-mywords.png)
+![Ebbinghaus Review](screenshot-ebbinghaus.png)
+
 [English](#english) · [中文](#中文)
 
 ---

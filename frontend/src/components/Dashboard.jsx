@@ -23,15 +23,17 @@ export default function Dashboard({ onNav }) {
         <p className="text-sm text-gray-400 mb-8">Here's your learning overview.</p>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-3 gap-4 mb-8 stagger">
+        <div className="grid grid-cols-5 gap-3 mb-8 stagger">
           {[
             { label: 'Total', value: stats.total },
             { label: 'Mastered', value: stats.mastered },
             { label: 'Today', value: stats.today },
+            { label: 'AI Lookups', value: stats.aiCount },
+            { label: 'Reviewed', value: stats.reviewed },
           ].map(s => (
-            <div key={s.label} className="neu-card p-5 animate-slide-up">
-              <p className="text-3xl font-bold text-gray-800">{s.value}</p>
-              <p className="text-xs text-gray-400 mt-2 font-semibold uppercase tracking-wider">{s.label}</p>
+            <div key={s.label} className="neu-card p-4 animate-slide-up">
+              <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+              <p className="text-[10px] text-gray-400 mt-1.5 font-semibold uppercase tracking-wider">{s.label}</p>
             </div>
           ))}
         </div>

@@ -6,7 +6,7 @@ import Quiz from './components/Quiz';
 import Settings from './components/Settings';
 import * as AIService from "../bindings/ensher/aiservice";
 
-export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {} });
+export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {}, editWord: null, setEditWord: () => {} });
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: '◎' },
@@ -19,6 +19,8 @@ const NAV = [
 export default function App() {
   const [page, setPage] = useState('dashboard');
   const [aiEnabled, setAiEnabled] = useState(true);
+  const [editWord, setEditWord] = useState(null);
+  const [wordsKey, setWordsKey] = useState(0);
 
   useEffect(() => {
     AIService.GetAISettings().then(s => {
@@ -26,22 +28,16 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
-  const renderPage = () => {
-    switch (page) {
-      case 'dashboard': return <Dashboard onNav={setPage} />;
-      case 'add': return <AddWord onAdded={() => setPage('words')} />;
-      case 'words': return <WordList />;
-      case 'quiz': return <Quiz />;
-      case 'settings': return <Settings aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} />;
-      default: return <Dashboard onNav={setPage} />;
-    }
+  const navigate = (id) => {
+    setPage(id);
+    if (id === 'words') setWordsKey(k => k + 1);
   };
 
   return (
-    <AIContext.Provider value={{ aiEnabled, setAiEnabled }}>
+    <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord }}>
       <div className="flex h-screen app-bg">
         {/* Sidebar */}
-        <nav className="w-52 neu-raised-sm m-3 mr-0 flex flex-col sidebar-drag overflow-hidden">
+        <nav className="w-52 neu-raised-sm m-3 mr-0 flex flex-col sidebar-drag overflow-hidden flex-shrink-0">
           <div className="px-5 pt-6 pb-6 sidebar-drag">
             <div className="flex items-center gap-3">
               <button className="btn btn-primary btn-icon w-9 h-9 flex-shrink-0 shadow-md" style={{ padding: 0 }}>
@@ -58,7 +54,7 @@ export default function App() {
             {NAV.map(item => (
               <button
                 key={item.id}
-                onClick={() => setPage(item.id)}
+                onClick={() => navigate(item.id)}
                 className={`btn btn-ghost w-full text-left px-3 py-2.5 text-[13px] font-semibold ${
                   page === item.id ? 'neu-pressed text-emerald-600' : ''
                 }`}
@@ -74,9 +70,23 @@ export default function App() {
           </div>
         </nav>
 
-        {/* Main content */}
-        <main className="flex-1 flex flex-col overflow-hidden m-3 ml-3 neu-raised-sm">
-          {renderPage()}
+        {/* Pages — always mounted, CSS controls visibility */}
+        <main className="flex-1 m-3 ml-3 neu-raised-sm overflow-y-auto">
+          <div style={{ display: page === 'dashboard' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
+            <Dashboard onNav={navigate} />
+          </div>
+          <div style={{ display: page === 'add' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
+            <AddWord onAdded={() => navigate('words')} />
+          </div>
+          <div key={wordsKey} style={{ display: page === 'words' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
+            <WordList onEditWord={(w) => { setEditWord(w); navigate('add'); }} />
+          </div>
+          <div style={{ display: page === 'quiz' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
+            <Quiz />
+          </div>
+          <div style={{ display: page === 'settings' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
+            <Settings aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} />
+          </div>
         </main>
       </div>
     </AIContext.Provider>

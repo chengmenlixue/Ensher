@@ -6,24 +6,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type Word struct {
-	ID             int64     `json:"id"`
-	Word           string    `json:"word"`
-	Phonetic       string    `json:"phonetic"`
-	Definition     string    `json:"definition"`
-	DefinitionZh   string    `json:"definitionZh"`
-	Example        string    `json:"example"`
-	Notes          string    `json:"notes"`
-	Tags           string    `json:"tags"`
-	MasteryLevel   int       `json:"masteryLevel"`
-	ReviewCount    int       `json:"reviewCount"`
-	CreatedAt      time.Time `json:"createdAt"`
-	LastReviewedAt time.Time `json:"lastReviewedAt"`
+	ID             int64   `json:"id"`
+	Word           string  `json:"word"`
+	Phonetic       string  `json:"phonetic"`
+	Definition     string  `json:"definition"`
+	DefinitionZh   string  `json:"definitionZh"`
+	Example        string  `json:"example"`
+	Notes          string  `json:"notes"`
+	Tags           string  `json:"tags"`
+	MasteryLevel   int     `json:"masteryLevel"`
+	ReviewCount    int     `json:"reviewCount"`
+	CreatedAt      string  `json:"createdAt"`
+	LastReviewedAt string  `json:"lastReviewedAt"`
 }
 
 type ReviewSettings struct {
@@ -88,6 +87,11 @@ func (w *WordService) migrate() error {
 	}
 	// Add definition_zh column for existing DBs
 	_, _ = w.db.Exec(`ALTER TABLE words ADD COLUMN definition_zh TEXT DEFAULT ''`)
+	// Performance indexes for 100k+ word scale
+	_, _ = w.db.Exec(`CREATE INDEX IF NOT EXISTS idx_words_created_at ON words(created_at)`)
+	_, _ = w.db.Exec(`CREATE INDEX IF NOT EXISTS idx_words_mastery_level ON words(mastery_level)`)
+	_, _ = w.db.Exec(`CREATE INDEX IF NOT EXISTS idx_words_last_reviewed_at ON words(last_reviewed_at)`)
+	_, _ = w.db.Exec(`CREATE INDEX IF NOT EXISTS idx_words_word ON words(word COLLATE NOCASE)`)
 	return nil
 }
 
@@ -230,8 +234,7 @@ func (w *WordService) GetWordsByEbbinghaus() ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
 		mastery_level, review_count, created_at, last_reviewed_at FROM words
 		ORDER BY
-			(CASE WHEN last_reviewed_at IS NULL OR last_reviewed_at = '' THEN 1 ELSE 0 END) ASC,
-			((5 - mastery_level) * 10 + CAST(julianday('now') - julianday(last_reviewed_at) AS INTEGER)) DESC,
+			((5 - mastery_level) * 10 + CAST(julianday('now') - julianday(COALESCE(NULLIF(last_reviewed_at, ''), 'now')) AS INTEGER)) DESC,
 			mastery_level ASC`)
 	if err != nil {
 		return nil, err
@@ -303,14 +306,18 @@ func (w *WordService) SubmitQuizAnswer(wordID int64, correct bool) (*QuizResult,
 }
 
 func (w *WordService) GetStats() (map[string]interface{}, error) {
-	var total, mastered, learning, newWords int
+	var total, mastered, learning, newWords, reviewed int
 	w.db.QueryRow(`SELECT COUNT(*) FROM words`).Scan(&total)
 	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE mastery_level >= 4`).Scan(&mastered)
 	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE mastery_level > 0 AND mastery_level < 4`).Scan(&learning)
 	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE mastery_level = 0`).Scan(&newWords)
+	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE review_count > 0`).Scan(&reviewed)
 
 	var todayCount int
 	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE DATE(created_at) = DATE('now')`).Scan(&todayCount)
+
+	var aiCount int
+	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE phonetic IS NOT NULL AND phonetic != ''`).Scan(&aiCount)
 
 	return map[string]interface{}{
 		"total":    total,
@@ -318,6 +325,8 @@ func (w *WordService) GetStats() (map[string]interface{}, error) {
 		"learning": learning,
 		"newWords": newWords,
 		"today":    todayCount,
+		"reviewed": reviewed,
+		"aiCount":  aiCount,
 	}, nil
 }
 
@@ -331,10 +340,10 @@ func (w *WordService) scanWord(row *sql.Row) (*Word, error) {
 		return nil, err
 	}
 	if createdAt.Valid {
-		word.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt.String)
+		word.CreatedAt = createdAt.String
 	}
 	if lastReviewed.Valid && lastReviewed.String != "" {
-		word.LastReviewedAt, _ = time.Parse("2006-01-02 15:04:05", lastReviewed.String)
+		word.LastReviewedAt = lastReviewed.String
 	}
 	return word, nil
 }
@@ -351,10 +360,10 @@ func (w *WordService) scanWords(rows *sql.Rows) ([]Word, error) {
 			return words, err
 		}
 		if createdAt.Valid {
-			word.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt.String)
+			word.CreatedAt = createdAt.String
 		}
 		if lastReviewed.Valid && lastReviewed.String != "" {
-			word.LastReviewedAt, _ = time.Parse("2006-01-02 15:04:05", lastReviewed.String)
+			word.LastReviewedAt = lastReviewed.String
 		}
 		words = append(words, word)
 	}

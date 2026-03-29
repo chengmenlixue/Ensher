@@ -22,6 +22,9 @@ Thumbs.db
 # Local settings (contains API keys — NEVER commit)
 ensher.json
 
+# Release process guide (local only — not committed)
+.release-guide.md
+
 # Go
 .task/
 *.exe

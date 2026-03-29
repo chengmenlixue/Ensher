@@ -61,6 +61,8 @@ AI features require an API key:
 - **MiniMax**: [platform.minimaxi.com](https://platform.minimaxi.com) → API Keys
 - **OpenAI**: [platform.openai.com](https://platform.openai.com) → API Keys
 
+> 🚀 **推荐 MiniMax Token Plan** — 9折专属优惠：[立即购买](https://platform.minimaxi.com/subscribe/token-plan?code=HF7kOLoTjA&source=link)
+
 ### Architecture
 
 ```
@@ -135,6 +137,8 @@ wails3 build
 获取 API Key：
 - **MiniMax**: [platform.minimaxi.com](https://platform.minimaxi.com) → API Keys
 - **OpenAI**: [platform.openai.com](https://platform.openai.com) → API Keys
+
+> 🚀 **推荐 MiniMax Token Plan** — 9折专属优惠：[立即购买](https://platform.minimaxi.com/subscribe/token-plan?code=HF7kOLoTjA&source=link)
 
 ### 项目结构
 

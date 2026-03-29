@@ -16,6 +16,7 @@ func main() {
 	wordService := NewWordService()
 	aiService := &AIService{}
 	quickLookupService := NewQuickLookupService()
+	articleService := NewArticleService()
 
 	app = application.New(application.Options{
 		Name:        "ensher",
@@ -24,6 +25,7 @@ func main() {
 			application.NewService(wordService),
 			application.NewService(aiService),
 			application.NewService(quickLookupService),
+			application.NewService(articleService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

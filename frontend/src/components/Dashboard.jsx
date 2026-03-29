@@ -3,10 +3,22 @@ import * as WordService from "../../bindings/ensher/wordservice";
 
 export default function Dashboard({ onNav }) {
   const [stats, setStats] = useState(null);
-  useEffect(() => { WordService.GetStats().then(s => setStats(s)).catch(console.error); }, []);
+  const [loadError, setLoadError] = useState(false);
+  useEffect(() => {
+    WordService.GetStats()
+      .then(s => { setStats(s); setLoadError(false); })
+      .catch(e => { console.error('[Dashboard] GetStats error:', e); setLoadError(true); });
+  }, []);
+
+  if (loadError) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ background: '#e8edf5' }}>
+      <p style={{ fontSize: 32 }}>⚠️</p>
+      <p style={{ color: '#6b7280', fontSize: 14 }}>Failed to load stats. Please restart the app.</p>
+    </div>
+  );
 
   if (!stats) return (
-    <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse">
+    <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse" style={{ background: '#e8edf5' }}>
       Loading...
     </div>
   );

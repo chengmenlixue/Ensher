@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import * as AIService from "../../bindings/ensher/aiservice";
 import * as WordService from "../../bindings/ensher/wordservice";
 import * as QuickLookup from "../../bindings/ensher/quicklookupservice";
+import { useAI } from '../App';
 
 const PROVIDERS = [
   { id: 'minimax', label: 'MiniMax', endpoint: 'api.minimaxi.com' },
@@ -19,6 +20,7 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
   const [showKey, setShowKey] = useState(false);
   const [hotkey, setHotkey] = useState('CommandOrControl+Shift+L');
   const [hotkeyEnabled, setHotkeyEnabled] = useState(true);
+  const { theme, setTheme } = useAI();
 
   useEffect(() => {
     AIService.GetAISettings().then(s => {
@@ -67,6 +69,22 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
             >
               <span
                 className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`}
+              />
+            </button>
+          </div>
+
+          {/* 主题切换 */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-600">深色模式</h3>
+              <p className="text-[11px] text-gray-400 mt-0.5">切换应用外观主题</p>
+            </div>
+            <button
+              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none ${theme === 'dark' ? 'bg-indigo-400' : 'bg-gray-300'}`}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${theme === 'dark' ? 'translate-x-6' : 'translate-x-1'}`}
               />
             </button>
           </div>

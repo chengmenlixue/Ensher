@@ -109,17 +109,24 @@ export default function QuickLookupWidget() {
           value={word}
           onChange={e => { setWord(e.target.value); if (result) setResult(null); }}
           onKeyDown={e => {
-            if (e.key === 'Enter' && word.trim()) {
+            if (e.key === 'Enter' && word.trim() && !searching) {
               if (result?.from === 'ai' && !isSaved) { handleSave(); }
               else { doSearch(word.trim()); }
             }
           }}
-          placeholder="Type a word and press Enter..."
+          disabled={searching}
+          placeholder={searching ? '查询中...' : 'Type a word and press Enter...'}
           className="w-full px-4 py-2.5 rounded-xl text-sm text-gray-100 placeholder-gray-500 outline-none"
-          style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }}
+          style={{
+            background: searching ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            opacity: searching ? 0.6 : 1,
+            cursor: searching ? 'not-allowed' : 'text',
+          }}
         />
         {searching && (
-          <p className="text-[10px] text-gray-500 mt-1.5 pl-1">
+          <p className="text-[10px] text-gray-500 mt-1.5 pl-1 flex items-center gap-1.5">
+            <span className="animate-spin-slow text-xs">⟳</span>
             {searchPhase === 'ai' ? 'AI 查询中...' : 'Searching...'}
           </p>
         )}

@@ -1,13 +1,15 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import Dashboard from './components/Dashboard';
 import AddWord from './components/AddWord';
 import WordList from './components/WordList';
 import Quiz from './components/Quiz';
+import DailyArticle from './components/DailyArticle';
 import Settings from './components/Settings';
 import QuickLookupWidget from './components/QuickLookup';
 import * as AIService from "../bindings/ensher/aiservice";
+import * as WordService from "../bindings/ensher/wordservice";
 
-export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {}, editWord: null, setEditWord: () => {} });
+export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {}, editWord: null, setEditWord: () => {}, theme: 'light', setTheme: () => {} });
 
 const isWidget = new URLSearchParams(window.location.search).get('window') === 'widget';
 
@@ -15,7 +17,8 @@ const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: '◎' },
   { id: 'add', label: 'Add Word', icon: '＋' },
   { id: 'words', label: 'My Words', icon: '☰' },
-  { id: 'quiz', label: 'Review', icon: '⟳' },
+  { id: 'quiz', label: 'Review', icon: '↻' },
+  { id: 'daily-article', label: 'Daily Article', icon: '✎' },
   { id: 'settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -24,6 +27,14 @@ export default function App() {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [editWord, setEditWord] = useState(null);
   const [wordsKey, setWordsKey] = useState(0);
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, word: null, wordCache: {} });
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+
+  // Apply theme to root element and persist
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     AIService.GetAISettings().then(s => {
@@ -31,9 +42,67 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
+  const tooltipWordRef = useRef(null);
+  const tooltipTimer = useRef(null);
+
+  const showTooltip = useCallback((e, wordText) => {
+    if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+
+    // Get the hovered element's bounding rect
+    const rect = e.currentTarget.getBoundingClientRect();
+    const tooltipWidth = 280;
+    const tooltipHeight = 160; // estimated max height
+    const offset = 12;
+
+    // Calculate available space in each direction
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const spaceRight = window.innerWidth - rect.left;
+    const spaceLeft = rect.left;
+
+    // Determine best position
+    let x = rect.left;
+    let y;
+
+    if (spaceBelow >= tooltipHeight + offset) {
+      // Show below the word
+      y = rect.bottom + offset;
+    } else if (spaceAbove >= tooltipHeight + offset) {
+      // Show above the word
+      y = rect.top - tooltipHeight - offset;
+    } else {
+      // Fallback: show below anyway, will be clipped
+      y = rect.bottom + offset;
+    }
+
+    // Horizontal adjustment - ensure tooltip stays within viewport
+    if (x + tooltipWidth > window.innerWidth - 10) {
+      x = window.innerWidth - tooltipWidth - 10;
+    }
+    if (x < 10) {
+      x = 10;
+    }
+
+    // Immediately show tooltip with wordText
+    tooltipWordRef.current = wordText;
+    setTooltip(prev => ({ ...prev, visible: true, x, y, word: { word: wordText, definition: '', phonetic: '', example: '' } }));
+
+    // Load details in background
+    WordService.GetWordByName(wordText).then(w => {
+      if (w && tooltipWordRef.current === wordText) {
+        setTooltip(prev => ({ ...prev, word: w, wordCache: { ...prev.wordCache, [wordText]: w } }));
+      }
+    }).catch(() => {});
+  }, []);
+
+  const hideTooltip = useCallback(() => {
+    tooltipWordRef.current = null;
+    setTooltip(prev => ({ ...prev, visible: false }));
+  }, []);
+
   if (isWidget) {
     return (
-      <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord }}>
+      <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme }}>
         <QuickLookupWidget />
       </AIContext.Provider>
     );
@@ -45,7 +114,7 @@ export default function App() {
   };
 
   return (
-    <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord }}>
+    <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme }}>
       <div className="flex h-screen app-bg">
         {/* Sidebar */}
         <nav className="w-52 neu-raised-sm m-3 mr-0 flex flex-col sidebar-drag overflow-hidden flex-shrink-0">
@@ -69,9 +138,10 @@ export default function App() {
                 className={`btn btn-ghost w-full text-left px-3 py-2.5 text-[13px] font-semibold ${
                   page === item.id ? 'neu-pressed text-emerald-600' : ''
                 }`}
+                style={{ justifyContent: 'flex-start' }}
               >
-                <span className="text-sm w-4 text-center opacity-60">{item.icon}</span>
-                {item.label}
+                <span className="text-sm w-5 text-left opacity-60">{item.icon}</span>
+                <span className="text-left flex-1">{item.label}</span>
               </button>
             ))}
           </div>
@@ -81,7 +151,7 @@ export default function App() {
           </div>
         </nav>
 
-        {/* Pages — always mounted, CSS controls visibility */}
+        {/* Pages */}
         <main className="flex-1 m-3 ml-3 neu-raised-sm overflow-y-auto">
           <div style={{ display: page === 'dashboard' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
             <Dashboard onNav={navigate} />
@@ -95,10 +165,38 @@ export default function App() {
           <div style={{ display: page === 'quiz' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
             <Quiz />
           </div>
+          <div style={{ display: page === 'daily-article' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
+            <DailyArticle showTooltip={showTooltip} hideTooltip={hideTooltip} aiEnabled={aiEnabled} />
+          </div>
           <div style={{ display: page === 'settings' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
             <Settings aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} />
           </div>
         </main>
+
+        {/* Global Tooltip - outside main to avoid overflow clipping */}
+        {(() => {
+          if (!tooltip.visible || !tooltip.word) return null;
+          return (
+            <div
+              style={{
+                position: 'fixed',
+                left: tooltip.x,
+                top: tooltip.y,
+                zIndex: 9999,
+                pointerEvents: 'none',
+                minWidth: 200,
+                maxWidth: 300,
+              }}
+              className="article-tooltip neu-card-sm p-4"
+            >
+              <p className="text-base font-bold text-gray-800">{tooltip.word.word}</p>
+              {tooltip.word.phonetic && <p className="text-xs text-gray-400 mb-2">{tooltip.word.phonetic}</p>}
+              {tooltip.word.definition && <p className="text-sm text-gray-700 mb-1">{tooltip.word.definition}</p>}
+              {tooltip.word.definitionZh && <p className="text-sm text-gray-500 mb-1">{tooltip.word.definitionZh}</p>}
+              {tooltip.word.example && <p className="text-xs text-gray-400 italic mt-2">"{tooltip.word.example}"</p>}
+            </div>
+          );
+        })()}
       </div>
     </AIContext.Provider>
   );

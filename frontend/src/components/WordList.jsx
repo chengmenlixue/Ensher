@@ -246,11 +246,15 @@ export default function WordList({ onEditWord }) {
   const scrollToLetter = useCallback((letter) => {
     const el = letterRefs.current[letter];
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const scroller = el.closest('.overflow-auto');
+      if (scroller) {
+        const headerH = scroller.previousElementSibling?.offsetHeight || 0;
+        scroller.scrollTo({ top: el.offsetTop - scroller.offsetTop - 8, behavior: 'smooth' });
+      }
     }
   }, []);
 
-  // Hover handlers — defined after toggleGroup and scrollToLetter
+  // Hover handlers
   const handleLetterMouseEnter = useCallback((letter) => {
     setHoveredLetter(letter);
     if (openGroups[letter] === false) toggleGroup(letter);
@@ -275,116 +279,39 @@ export default function WordList({ onEditWord }) {
     [isDate, dateFilter, words]
   );
 
+  const STICKY_BG = '#e8edf5';
+
   return (
-    <div className="flex-1 overflow-auto p-8">
-      <div className="max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-700">My Words</h2>
-            <p className="text-sm text-gray-400">{words.length} words{search.trim() ? ` — "${search.trim()}"` : ''}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="btn btn-soft p-1 flex gap-0.5">
-              {SORTS.map(s => (
-                <button key={s.id} onClick={() => setSort(s.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                    sort === s.id ? 'neu-pressed-sm text-emerald-600' : 'text-gray-400 hover:text-gray-600'
-                  }`}>{s.label}</button>
-              ))}
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* ── Fixed header ────────────────────────────────────────── */}
+      <div className="flex-shrink-0 px-8 pt-8" style={{ background: STICKY_BG }}>
+        <div className="max-w-2xl">
+          {/* Title row */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-700">My Words</h2>
+              <p className="text-sm text-gray-400">{words.length} words{search.trim() ? ` — "${search.trim()}"` : ''}</p>
             </div>
-            <input
-              className="neu-input px-3.5 py-2 text-sm w-40"
-              style={{ paddingTop: 8, paddingBottom: 8 }}
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search..."
-            />
-          </div>
-        </div>
-
-        {/* Search hint */}
-        {search.trim() && !initialLoading && words.length > 0 && (
-          <p className="text-xs text-gray-400 mb-4 px-1">
-            共找到 <span className="font-semibold text-gray-500">{words.length}</span> 个结果
-          </p>
-        )}
-
-        {/* Loading */}
-        {initialLoading ? (
-          <div className="text-center py-20 text-gray-400 animate-pulse">Loading...</div>
-        ) : words.length === 0 ? (
-          <div className="neu-card p-12 text-center">
-            <p className="text-5xl mb-4">📖</p>
-            <p className="text-gray-400 font-medium">
-              {search.trim() ? `No results for "${search.trim()}"` : 'No words yet'}
-            </p>
-          </div>
-        ) : null}
-
-        {/* ── Alpha layout ─────────────────────────────────────────── */}
-        {isAlpha && !initialLoading && (
-          <div className="flex gap-4">
-            {/* Letter sidebar */}
-            <div className="flex-shrink-0 w-10">
-              <div className="sticky top-8 space-y-0">
-                {allLetters.map(letter => (
-                  <button
-                    key={letter}
-                    onClick={() => toggleGroup(letter)}
-                    onMouseEnter={() => handleLetterMouseEnter(letter)}
-                    onMouseLeave={handleLetterMouseLeave}
-                    className={`w-full text-center py-1.5 text-xs font-bold rounded-lg transition-all duration-150
-                      ${openGroups[letter] !== false
-                        ? 'text-emerald-600 bg-emerald-50 neu-pressed-sm'
-                        : hoveredLetter === letter
-                          ? 'text-emerald-500'
-                          : 'text-gray-400 hover:text-gray-600'
-                      }`}>
-                    {letter}
-                  </button>
+            <div className="flex items-center gap-3">
+              <div className="btn btn-soft p-1 flex gap-0.5">
+                {SORTS.map(s => (
+                  <button key={s.id} onClick={() => setSort(s.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                      sort === s.id ? 'neu-pressed-sm text-emerald-600' : 'text-gray-400 hover:text-gray-600'
+                    }`}>{s.label}</button>
                 ))}
               </div>
-            </div>
-
-            {/* Dashed vertical line */}
-            <div className="flex-shrink-0 relative" style={{ width: 1 }}>
-              <div className="sticky top-8" style={{
-                background: 'repeating-linear-gradient(to bottom, transparent 0px, transparent 8px, var(--neu-shadow-dark) 8px, var(--neu-shadow-dark) 10px)',
-                opacity: 0.35, minHeight: 40,
-              }} />
-            </div>
-
-            {/* Words */}
-            <div className="flex-1 min-w-0 space-y-4">
-              {allLetters.map(letter => (
-                <div key={letter} ref={el => { letterRefs.current[letter] = el; }}>
-                  {openGroups[letter] !== false && (
-                    <>
-                      <div className="flex items-center gap-3 mb-3">
-                        <span className="text-2xl font-bold text-emerald-600 leading-none">{letter}</span>
-                        <div className="flex-1 h-px" style={{
-                          background: 'repeating-linear-gradient(to right, var(--neu-shadow-dark) 0px, var(--neu-shadow-dark) 4px, transparent 4px, transparent 8px)',
-                          opacity: 0.3,
-                        }} />
-                        <span className="text-xs text-gray-400">{alphaView[letter].length}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {alphaView[letter].map(w => (
-                          <Card key={w.id} w={w} onDelete={del} onEdit={onEditWord} showRetention={false} />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+              <input
+                className="neu-input px-3.5 py-2 text-sm w-40"
+                style={{ paddingTop: 8, paddingBottom: 8 }}
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search..."
+              />
             </div>
           </div>
-        )}
 
-        {/* ── Date layout ─────────────────────────────────────────── */}
-        {isDate && !initialLoading && (
-          <div>
-            {/* Sliding pill filter */}
+          {/* Date pill filter */}
+          {isDate && !initialLoading && words.length > 0 && (
             <div className="relative neu-card p-1.5 flex mb-5" style={{ gap: 0 }}>
               <div
                 ref={pillRef}
@@ -411,32 +338,10 @@ export default function WordList({ onEditWord }) {
                 );
               })}
             </div>
+          )}
 
-            {/* Dashed separator */}
-            <div className="h-px mb-5" style={{
-              background: 'repeating-linear-gradient(to right, var(--neu-shadow-dark) 0px, var(--neu-shadow-dark) 4px, transparent 4px, transparent 10px)',
-              opacity: 0.3,
-            }} />
-
-            {/* Word list */}
-            <div className="space-y-2">
-              {dateFilteredWords.length === 0 ? (
-                <div className="neu-card p-8 text-center">
-                  <p className="text-gray-400 text-sm">No words in this period</p>
-                </div>
-              ) : (
-                dateFilteredWords.map(w => (
-                  <Card key={w.id} w={w} onDelete={del} onEdit={onEditWord} showRetention={false} />
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ── Ebbinghaus layout (grouped by mastery) ───────────────── */}
-        {isFlat && !initialLoading && (
-          <div>
-            {/* Mastery pill filter */}
+          {/* Mastery pill filter */}
+          {isFlat && !initialLoading && words.length > 0 && (
             <div className="relative neu-card p-1.5 flex mb-5" style={{ gap: 0 }}>
               <div
                 ref={masteryPillRef}
@@ -461,7 +366,6 @@ export default function WordList({ onEditWord }) {
                     <span className={`block text-[10px] mt-0.5 font-normal ${masteryFilter === tab.id ? 'text-emerald-500' : 'text-gray-400'}`}>
                       {count}
                     </span>
-                    {/* Color bar at bottom of button */}
                     {barColor && (
                       <div
                         className="absolute bottom-1 left-4 right-4 h-1 rounded-full"
@@ -472,29 +376,143 @@ export default function WordList({ onEditWord }) {
                 );
               })}
             </div>
+          )}
 
-            {/* Dashed separator */}
-            <div className="h-px mb-5" style={{
-              background: 'repeating-linear-gradient(to right, var(--neu-shadow-dark) 0px, var(--neu-shadow-dark) 4px, transparent 4px, transparent 10px)',
-              opacity: 0.3,
-            }} />
+          {/* Search hint */}
+          {search.trim() && !initialLoading && words.length > 0 && (
+            <p className="text-xs text-gray-400 mb-4 px-1">
+              共找到 <span className="font-semibold text-gray-500">{words.length}</span> 个结果
+            </p>
+          )}
+        </div>
+      </div>
 
-            {/* Word list */}
-            {masteryFilteredWords.length === 0 ? (
-              <div className="neu-card p-8 text-center">
-                <p className="text-gray-400 text-sm">
-                  {masteryFilter === 'all' ? 'No words yet' : `No "${MASTERY[parseInt(masteryFilter)]}" words`}
-                </p>
+      {/* ── Scrollable content ──────────────────────────────────── */}
+      <div className="flex-1 overflow-auto px-8 pb-8" style={{ background: STICKY_BG }}>
+        <div className="max-w-2xl">
+
+          {/* Loading / Empty */}
+          {initialLoading ? (
+            <div className="text-center py-20 text-gray-400 animate-pulse">Loading...</div>
+          ) : words.length === 0 ? (
+            <div className="neu-card p-12 text-center">
+              <p className="text-5xl mb-4">📖</p>
+              <p className="text-gray-400 font-medium">
+                {search.trim() ? `No results for "${search.trim()}"` : 'No words yet'}
+              </p>
+            </div>
+          ) : null}
+
+          {/* ── Alpha layout ─────────────────────────────────────────── */}
+          {isAlpha && !initialLoading && (
+            <div className="flex gap-4">
+              {/* Letter sidebar */}
+              <div className="flex-shrink-0 w-10">
+                <div className="sticky top-4 space-y-0">
+                  {allLetters.map(letter => (
+                    <button
+                      key={letter}
+                      onClick={() => toggleGroup(letter)}
+                      onMouseEnter={() => handleLetterMouseEnter(letter)}
+                      onMouseLeave={handleLetterMouseLeave}
+                      className={`w-full text-center py-1.5 text-xs font-bold rounded-lg transition-all duration-150
+                        ${openGroups[letter] !== false
+                          ? 'text-emerald-600 bg-emerald-50 neu-pressed-sm'
+                          : hoveredLetter === letter
+                            ? 'text-emerald-500'
+                            : 'text-gray-400 hover:text-gray-600'
+                        }`}>
+                      {letter}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {masteryFilteredWords.map(w => (
-                  <Card key={w.id} w={w} onDelete={del} onEdit={onEditWord} showRetention={showRetention} />
+
+              {/* Dashed vertical line */}
+              <div className="flex-shrink-0 relative" style={{ width: 1 }}>
+                <div className="sticky top-4" style={{
+                  background: 'repeating-linear-gradient(to bottom, transparent 0px, transparent 8px, var(--neu-shadow-dark) 8px, var(--neu-shadow-dark) 10px)',
+                  opacity: 0.35, minHeight: 40,
+                }} />
+              </div>
+
+              {/* Words */}
+              <div className="flex-1 min-w-0 space-y-4">
+                {allLetters.map(letter => (
+                  <div key={letter} ref={el => { letterRefs.current[letter] = el; }}>
+                    {openGroups[letter] !== false && (
+                      <>
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="text-2xl font-bold text-emerald-600 leading-none">{letter}</span>
+                          <div className="flex-1 h-px" style={{
+                            background: 'repeating-linear-gradient(to right, var(--neu-shadow-dark) 0px, var(--neu-shadow-dark) 4px, transparent 4px, transparent 8px)',
+                            opacity: 0.3,
+                          }} />
+                          <span className="text-xs text-gray-400">{alphaView[letter].length}</span>
+                        </div>
+                        <div className="space-y-2">
+                          {alphaView[letter].map(w => (
+                            <Card key={w.id} w={w} onDelete={del} onEdit={onEditWord} showRetention={false} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+
+          {/* ── Date layout (words only) ─────────────────────────── */}
+          {isDate && !initialLoading && words.length > 0 && (
+            <div>
+              {/* Dashed separator */}
+              <div className="h-px mb-5" style={{
+                background: 'repeating-linear-gradient(to right, var(--neu-shadow-dark) 0px, var(--neu-shadow-dark) 4px, transparent 4px, transparent 10px)',
+                opacity: 0.3,
+              }} />
+
+              {/* Word list */}
+              <div className="space-y-2">
+                {dateFilteredWords.length === 0 ? (
+                  <div className="neu-card p-8 text-center">
+                    <p className="text-gray-400 text-sm">No words in this period</p>
+                  </div>
+                ) : (
+                  dateFilteredWords.map(w => (
+                    <Card key={w.id} w={w} onDelete={del} onEdit={onEditWord} showRetention={false} />
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Ebbinghaus layout (words only) ────────────────────── */}
+          {isFlat && !initialLoading && words.length > 0 && (
+            <div>
+              {/* Dashed separator */}
+              <div className="h-px mb-5" style={{
+                background: 'repeating-linear-gradient(to right, var(--neu-shadow-dark) 0px, var(--neu-shadow-dark) 4px, transparent 4px, transparent 10px)',
+                opacity: 0.3,
+              }} />
+
+              {/* Word list */}
+              {masteryFilteredWords.length === 0 ? (
+                <div className="neu-card p-8 text-center">
+                  <p className="text-gray-400 text-sm">
+                    {masteryFilter === 'all' ? 'No words yet' : `No "${MASTERY[parseInt(masteryFilter)]}" words`}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {masteryFilteredWords.map(w => (
+                    <Card key={w.id} w={w} onDelete={del} onEdit={onEditWord} showRetention={showRetention} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

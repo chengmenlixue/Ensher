@@ -15,6 +15,7 @@ var app *application.App
 func main() {
 	wordService := NewWordService()
 	aiService := &AIService{}
+	quickLookupService := NewQuickLookupService()
 
 	app = application.New(application.Options{
 		Name:        "ensher",
@@ -22,6 +23,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(wordService),
 			application.NewService(aiService),
+			application.NewService(quickLookupService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -37,12 +39,14 @@ func main() {
 		Height: 680,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 40,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
+			Backdrop:               application.MacBackdropTranslucent,
+			TitleBar:               application.MacTitleBarHiddenInset,
 		},
 		BackgroundColour: application.NewRGB(255, 255, 255),
-		URL:              "/",
+		URL:             "/",
 	})
+
+	quickLookupService.SetApp(app)
 
 	err := app.Run()
 	if err != nil {

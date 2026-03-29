@@ -4,9 +4,12 @@ import AddWord from './components/AddWord';
 import WordList from './components/WordList';
 import Quiz from './components/Quiz';
 import Settings from './components/Settings';
+import QuickLookupWidget from './components/QuickLookup';
 import * as AIService from "../bindings/ensher/aiservice";
 
 export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {}, editWord: null, setEditWord: () => {} });
+
+const isWidget = new URLSearchParams(window.location.search).get('window') === 'widget';
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: '◎' },
@@ -27,6 +30,14 @@ export default function App() {
       if (s) setAiEnabled(s.aiEnabled);
     }).catch(() => {});
   }, []);
+
+  if (isWidget) {
+    return (
+      <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord }}>
+        <QuickLookupWidget />
+      </AIContext.Provider>
+    );
+  }
 
   const navigate = (id) => {
     setPage(id);

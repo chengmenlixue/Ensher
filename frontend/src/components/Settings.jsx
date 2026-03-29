@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as AIService from "../../bindings/ensher/aiservice";
 import * as WordService from "../../bindings/ensher/wordservice";
+import * as QuickLookup from "../../bindings/ensher/quicklookupservice";
 
 const PROVIDERS = [
   { id: 'minimax', label: 'MiniMax', endpoint: 'api.minimaxi.com' },
@@ -16,6 +17,8 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
   const [ioWorking, setIoWorking] = useState(false);
   const [msg, setMsg] = useState(null);
   const [showKey, setShowKey] = useState(false);
+  const [hotkey, setHotkey] = useState('CommandOrControl+Shift+L');
+  const [hotkeyEnabled, setHotkeyEnabled] = useState(true);
 
   useEffect(() => {
     AIService.GetAISettings().then(s => {
@@ -27,6 +30,8 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
       }
     }).catch(console.error);
     WordService.GetReviewSettings().then(s => { if (s) setDailyLimit(s.dailyLimit); }).catch(() => {});
+    QuickLookup.GetHotkey().then(h => { if (h) setHotkey(h); }).catch(() => {});
+    QuickLookup.GetHotkeyEnabled().then(en => setHotkeyEnabled(en)).catch(() => {});
   }, []);
 
   const handleSave = async () => {
@@ -135,6 +140,60 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
           </div>
 
           <div className="border-t border-gray-200/50" />
+
+          {/* Quick Lookup */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wider">Quick Lookup</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-600">Global Hotkey</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">Press to open floating lookup widget</p>
+              </div>
+              <button
+                onClick={() => setHotkeyEnabled(!hotkeyEnabled)}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${hotkeyEnabled ? 'bg-emerald-400' : 'bg-gray-300'}`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${hotkeyEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+            {hotkeyEnabled && (
+              <div>
+                {/* Hotkey recorder */}
+                <div
+                  tabIndex={0}
+                  onKeyDown={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const parts = [];
+                    if (e.metaKey || e.ctrlKey) parts.push('CommandOrControl');
+                    if (e.altKey) parts.push('Alt');
+                    if (e.shiftKey) parts.push('Shift');
+                    const key = e.key;
+                    if (['Meta','Control','Alt','Shift','CapsLock','Tab','Escape','Backspace','Enter',' '].includes(key)) return;
+                    parts.push(key.length === 1 ? key.toUpperCase() : key);
+                    if (parts.length >= 2) setHotkey(parts.join('+'));
+                  }}
+                  className="neu-pressed-sm flex items-center px-4 py-3 text-sm text-gray-700 select-none cursor-text"
+                  style={{ minHeight: '44px' }}
+                >
+                  {hotkey ? hotkey.split('+').map((p, i) => (
+                    <span key={i}>
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-600 mr-1">{p}</span>
+                      {i < hotkey.split('+').length - 1 && <span className="text-gray-400 mr-1 text-xs">+</span>}
+                    </span>
+                  )) : <span className="text-gray-400 text-xs">Click here and press a key combo...</span>}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5">Must include Command / Ctrl / Option + another key</p>
+                {/* Trigger button */}
+                <button
+                  onClick={() => QuickLookup.ShowWidget()}
+                  className="btn btn-soft w-full py-2.5 mt-3 text-sm font-semibold"
+                >
+                  触发 Quick Lookup
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Data management */}
           <div>

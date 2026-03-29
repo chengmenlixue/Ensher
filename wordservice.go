@@ -346,9 +346,17 @@ func (w *WordService) DeleteWord(id int64) error {
 }
 
 func (w *WordService) UpdateWord(id int64, phonetic, definition, definitionZh, example, notes, tags string) error {
-	_, err := w.db.Exec(`UPDATE words SET phonetic=?, definition=?, definition_zh=?, example=?, notes=?, tags=? WHERE id=?`,
+	fmt.Printf("UpdateWord: id=%d phonetic=%q def=%q defZh=%q ex=%q notes=%q tags=%q\n",
+		id, phonetic, definition, definitionZh, example, notes, tags)
+	result, err := w.db.Exec(`UPDATE words SET phonetic=?, definition=?, definition_zh=?, example=?, notes=?, tags=? WHERE id=?`,
 		phonetic, definition, definitionZh, example, notes, tags, id)
-	return err
+	if err != nil {
+		fmt.Printf("UpdateWord ERROR: %v\n", err)
+		return err
+	}
+	rows, _ := result.RowsAffected()
+	fmt.Printf("UpdateWord: rows affected=%d\n", rows)
+	return nil
 }
 
 func (w *WordService) GetWordsForReview() ([]Word, error) {

@@ -256,6 +256,8 @@ export default function AddWord({ onAdded }) {
                 onKeyDown={aiEnabled ? handleWordKeyDown : undefined}
                 placeholder="e.g. ephemeral"
                 autoFocus
+                readOnly={!!editWord}
+                disabled={!!editWord}
               />
               {aiEnabled ? (
                 <button type="button" onClick={handleAI} disabled={aiLoading || !form.word.trim()}

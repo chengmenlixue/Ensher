@@ -449,11 +449,11 @@ body {
    SIDEBAR DRAG
 ════════════════════════════════════ */
 .sidebar-drag {
-  -webkit-app-region: drag;
+  --wails-draggable: drag;
 }
 .sidebar-drag button,
 .sidebar-drag a {
-  -webkit-app-region: no-drag;
+  --wails-draggable: no-drag;
 }
 
 /* ════════════════════════════════════

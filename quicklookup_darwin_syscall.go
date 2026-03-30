@@ -1,10 +1,10 @@
 //go:build darwin
-// +build darwin
 
 package main
 
 import (
 	"fmt"
+	"os/exec"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -61,15 +61,15 @@ var (
 	fnCGEventGetIntegerValueField  uintptr
 	fnCGEventGetFlags              uintptr
 	fnCFMachPortCreateRunLoopSource uintptr
-	fnCFRunLoopAddSource           uintptr
-	fnCFRunLoopGetCurrent          uintptr
-	fnCFRunLoopRun                 uintptr
-	fnCFRunLoopStop                uintptr
-	fnCFRelease                    uintptr
+	fnCFRunLoopAddSource          uintptr
+	fnCFRunLoopGetCurrent         uintptr
+	fnCFRunLoopRun                uintptr
+	fnCFRunLoopStop               uintptr
+	fnCFRelease                   uintptr
 
 	kCFRunLoopCommonModes uintptr
-	symbolsOnce           sync.Once
-	symbolsOK             bool
+	symbolsOnce          sync.Once
+	symbolsOK            bool
 )
 
 func loadSymbols() {
@@ -157,17 +157,117 @@ func cfReleaseFn(cf uintptr) {
 	purego.SyscallN(fnCFRelease, cf)
 }
 
+// ─── AppKit / ObjC runtime ─────────────────────────────────────────────
+
+var (
+	appkitHandle uintptr
+	objcHandle   uintptr
+
+	fnObjcMsgSend uintptr
+	fnSelGetUid  uintptr
+	fnSelRegisterName uintptr
+	fnObjcGetClass uintptr
+
+	appkitOnce sync.Once
+	appkitOK   bool
+)
+
+func loadAppKit() {
+	appkitOnce.Do(func() {
+		// Try multiple possible paths for AppKit (path varies across macOS versions)
+		paths := []string{
+			"/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
+			"/System/Library/Frameworks/AppKit.framework/Versions/Current/AppKit",
+			"/System/Library/Frameworks/AppKit.framework/AppKit",
+		}
+		var err error
+		for _, path := range paths {
+			appkitHandle, err = purego.Dlopen(path, rtldLazy|rtldGlobal)
+			if err == nil {
+				fmt.Printf("ensher: AppKit loaded from %s\n", path)
+				break
+			}
+		}
+		if appkitHandle == 0 {
+			fmt.Printf("ensher: AppKit load failed: %v (tried: %v)\n", err, paths)
+			return
+		}
+
+		// Objective-C runtime
+		objcPaths := []string{
+			"/usr/lib/libobjc.A.dylib",
+			"/usr/lib/libobjc.dylib",
+		}
+		for _, path := range objcPaths {
+			objcHandle, err = purego.Dlopen(path, rtldLazy|rtldGlobal)
+			if err == nil {
+				break
+			}
+		}
+		if objcHandle == 0 {
+			fmt.Printf("ensher: libobjc load failed: %v\n", err)
+			return
+		}
+
+		fnSelGetUid = dlsym(objcHandle, "sel_getUid")
+		fnSelRegisterName = dlsym(objcHandle, "sel_registerName")
+		fnObjcGetClass = dlsym(objcHandle, "objc_getClass")
+
+		// objc_msgSend is the main ObjC message dispatch
+		fnObjcMsgSend = dlsym(objcHandle, "objc_msgSend")
+
+		appkitOK = fnObjcMsgSend != 0 && (fnSelGetUid != 0 || fnSelRegisterName != 0) && fnObjcGetClass != 0
+		fmt.Printf("ensher: AppKit/ObjC OK: %v (msgSend=%x sel=%x getClass=%x)\n",
+			appkitOK, fnObjcMsgSend, fnSelGetUid, fnObjcGetClass)
+	})
+}
+
+// sel returns the SEL for a given selector name, using a temporary C string allocation.
+func sel(name string) uintptr {
+	// Build a null-terminated C string on the stack
+	cs := append([]byte(name), 0)
+	if fnSelGetUid != 0 {
+		ret, _, _ := purego.SyscallN(fnSelGetUid, uintptr(unsafe.Pointer(&cs[0])))
+		return ret
+	}
+	if fnSelRegisterName != 0 {
+		ret, _, _ := purego.SyscallN(fnSelRegisterName, uintptr(unsafe.Pointer(&cs[0])))
+		return ret
+	}
+	return 0
+}
+
+// RaiseWidgetAboveFullscreen sets the NSWindow level so it floats above
+// fullscreen applications. Must be called from the main thread, before the window is shown.
+func RaiseWidgetAboveFullscreen(nsWindowPtr uintptr) {
+	if nsWindowPtr == 0 {
+		fmt.Println("ensher: RaiseWidgetAboveFullscreen: nil pointer")
+		return
+	}
+	SetWidgetWindowLevelGo(nsWindowPtr)
+	fmt.Printf("ensher: RaiseWidgetAboveFullscreen done for 0x%x\n", nsWindowPtr)
+}
+
+// RaiseWidgetLevelAsync registers for window notifications to push level after window becomes visible.
+func RaiseWidgetLevelAsync(nsWindowPtr uintptr) {
+	if nsWindowPtr == 0 {
+		return
+	}
+	SetWidgetLevelAsyncGo(nsWindowPtr)
+	fmt.Printf("ensher: RaiseWidgetLevelAsync registered for 0x%x\n", nsWindowPtr)
+}
+
 // ─── Constants ─────────────────────────────────────────────────────────
 
 const (
 	kCGHIDEventTap                 = 0
-	kCGSessionEventTap             = 1
-	kCGHeadInsertEventTap          = 0
+	kCGSessionEventTap              = 1
+	kCGHeadInsertEventTap           = 0
 	kCGEventKeyDown                = 10
-	kCGEventFlagsChanged           = 12
-	kCGEventTapDisabledByTimeout   = 0xFFFFFFFE
-	kCGEventTapDisabledByUserInput = 0xFFFFFFFF
-	kCGKeyboardEventKeycode        = 9
+	kCGEventFlagsChanged            = 12
+	kCGEventTapDisabledByTimeout    = 0xFFFFFFFE
+	kCGEventTapDisabledByUserInput  = 0xFFFFFFFF
+	kCGKeyboardEventKeycode         = 9
 
 	// CGEventFlags bit positions
 	flagCtrl  = 1 << 18
@@ -186,7 +286,6 @@ func setupCallback() {
 }
 
 // eventTapHandler — all params uintptr to match purego.NewCallback ABI.
-// CGEventTapCallBack: (CGEventTapProxy, CGEventType, CGEventRef, void*) -> CGEventRef
 func eventTapHandler(proxy uintptr, eventType uintptr, event uintptr, refcon uintptr) uintptr {
 	if eventType == kCGEventTapDisabledByTimeout || eventType == kCGEventTapDisabledByUserInput {
 		return event
@@ -206,7 +305,6 @@ func eventTapHandler(proxy uintptr, eventType uintptr, event uintptr, refcon uin
 
 	flags := cgEventGetFlagsFn(event)
 
-	// Check each required modifier — all must match
 	if hs.ctrl && (flags&flagCtrl) == 0 {
 		return event
 	}
@@ -236,6 +334,12 @@ func eventTapHandler(proxy uintptr, eventType uintptr, event uintptr, refcon uin
 	return event
 }
 
+// ─── Open Accessibility Settings ─────────────────────────────────────────
+
+func openAccessibilitySettings() {
+	exec.Command("open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility").Run()
+}
+
 // ─── registerGlobalHotkeyImpl (purego, no CGO) ────────────────────────
 
 func registerGlobalHotkeyImpl(quit <-chan struct{}) {
@@ -261,8 +365,9 @@ func registerGlobalHotkeyImpl(quit <-chan struct{}) {
 			fmt.Printf("ensher: session tap = 0x%x\n", tap)
 		}
 		if tap == 0 {
-			fmt.Println("ensher: CGEventTap unavailable — global hotkey disabled")
-			fmt.Println("  → Grant Accessibility in System Settings > Privacy & Security > Accessibility")
+			fmt.Println("ensher: CGEventTap unavailable — global hotkey needs Accessibility permission")
+			fmt.Println("  → Opening System Settings > Privacy & Security > Accessibility")
+			go openAccessibilitySettings()
 			return
 		}
 
@@ -279,7 +384,6 @@ func registerGlobalHotkeyImpl(quit <-chan struct{}) {
 
 		fmt.Println("ensher: global hotkey tap active")
 
-		// CFRunLoopRun blocks until stopped — use quit channel to stop it
 		go func() {
 			<-quit
 			cfRunLoopStopFn(rl)

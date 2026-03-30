@@ -135,7 +135,7 @@ func (s *QuickLookupService) ShowWidget() {
 		Height:      370,
 		X:           mx + 24,
 		Y:           my - 400,
-		AlwaysOnTop: true,
+		AlwaysOnTop: false,
 		Frameless:   true,
 		Hidden:      true,
 		Mac: application.MacWindow{
@@ -152,9 +152,25 @@ func (s *QuickLookupService) ShowWidget() {
 	}
 
 	s.widget = window
+
+	// Raise window level BEFORE showing — use InvokeSync from the background goroutine
+	// so setLevel: fires before window is presented.
+	native := window.NativeWindow()
+	fmt.Printf("QuickLookup: NativeWindow() = %v\n", native)
+	if native != nil {
+		application.InvokeSync(func() {
+			RaiseWidgetAboveFullscreen(uintptr(native))
+		})
+	}
+
 	fmt.Println("QuickLookup: showing and focusing widget")
 	window.Show()
 	window.Focus()
+
+	// Register for window notifications to push level again after window is fully visible
+	application.InvokeAsync(func() {
+		RaiseWidgetLevelAsync(uintptr(native))
+	})
 }
 
 // HideWidget hides and widget.

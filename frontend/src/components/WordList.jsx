@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
 
 const MASTERY = ['New','Recognize','Familiar','Understand','Mastered','Expert'];
-const MC = ['text-zinc-500','text-rose-500','text-orange-500','text-amber-500','text-emerald-600','text-emerald-600'];
-const MB = ['badge-zinc','badge-rose','badge-amber','badge-amber','badge-emerald','badge-emerald'];
-const MASTERY_COLORS = ['#71717a','#f43f5e','#f97316','#f59e0b','#10b981','#10b981'];
+const MC = ['text-zinc-500','text-rose-500','text-orange-500','text-amber-500','text-emerald-600','text-amber-600'];
+const MB = ['badge-zinc','badge-rose','badge-amber','badge-amber','badge-emerald','badge-amber'];
+const MASTERY_COLORS = ['#71717a','#f43f5e','#f97316','#f59e0b','#10b981','#eab308'];
 
 const SORTS = [
   { id: 'ebbinghaus', label: '遗忘曲线' },
@@ -12,11 +12,11 @@ const SORTS = [
   { id: 'alpha',      label: '字母排序' },
 ];
 
-const RETAIN_COLORS = ['#f87171','#fb923c','#fbbf24','#a3e635','#34d399'];
+const RETAIN_COLORS = ['#f87171','#fb923c','#fbbf24','#a3e635','#34d399','#eab308'];
 
 // ─── Retention bar ───────────────────────────────────────────────────────
 function RetentionBar({ mastery, lastReviewedAt }) {
-  let urgency = Math.min(4, Math.max(0, mastery));
+  let urgency = Math.min(5, Math.max(0, mastery));
   if (lastReviewedAt) {
     const days = (Date.now() - new Date(lastReviewedAt.replace(' ', 'T')).getTime()) / 86400000;
     if (days > 7) urgency = Math.max(0, urgency - 2);
@@ -45,8 +45,8 @@ function Card({ w, onDelete, onEdit, showRetention }) {
         {showRetention && <RetentionBar mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} />}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-bold text-gray-700">{w.word}</span>
-            {w.phonetic && <span className="text-xs text-gray-400">{w.phonetic}</span>}
+            <span className="text-base font-bold word-display">{w.word}</span>
+            {w.phonetic && <span className="text-xs word-display-phonetic">{w.phonetic}</span>}
             <span className={`badge ${MB[w.masteryLevel]} ${MC[w.masteryLevel]}`}>{MASTERY[w.masteryLevel]}</span>
           </div>
           {w.definition && (
@@ -232,7 +232,7 @@ export default function WordList({ onEditWord }) {
   }, [words, masteryFilter]);
 
   useEffect(() => {
-    if (sort === 'alpha' || search.trim()) {
+    if (sort === 'alpha') {
       setOpenGroups(prev => {
         const keys = Object.keys(buildAlpha(words));
         const next = {};
@@ -266,9 +266,9 @@ export default function WordList({ onEditWord }) {
   }, []);
 
   const showRetention = sort === 'ebbinghaus' && !search.trim();
-  const isAlpha = sort === 'alpha' || search.trim();
-  const isDate = sort === 'date' && !search.trim();
-  const isFlat = sort === 'ebbinghaus' && !search.trim();
+  const isAlpha = sort === 'alpha';
+  const isDate = sort === 'date';
+  const isFlat = sort === 'ebbinghaus';
 
   const dateGroups = useMemo(() => isDate ? buildDate(words) : {}, [words, isDate, buildDate]);
 
@@ -293,11 +293,13 @@ export default function WordList({ onEditWord }) {
               <p className="text-sm text-gray-400">{words.length} words{search.trim() ? ` — "${search.trim()}"` : ''}</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="btn btn-soft p-1 flex gap-0.5">
+              <div className="neu-raised-sm p-1 flex gap-0.5">
                 {SORTS.map(s => (
                   <button key={s.id} onClick={() => setSort(s.id)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                      sort === s.id ? 'neu-pressed-sm text-emerald-600' : 'text-gray-400 hover:text-gray-600'
+                      sort === s.id
+                        ? 'neu-pressed-sm text-gray-700 dark:text-gray-200'
+                        : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
                     }`}>{s.label}</button>
                 ))}
               </div>
@@ -353,7 +355,7 @@ export default function WordList({ onEditWord }) {
                   ? words.length
                   : (masteryGroups[tab.id]?.length ?? 0);
                 const levelIdx = tab.id === 'all' ? null : parseInt(tab.id, 10);
-                const barColor = levelIdx !== null ? RETAIN_COLORS[Math.min(levelIdx, 4)] : null;
+                const barColor = levelIdx !== null ? RETAIN_COLORS[Math.min(levelIdx, 5)] : null;
                 return (
                   <button
                     key={tab.id}

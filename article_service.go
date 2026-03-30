@@ -12,7 +12,60 @@ import (
 	"time"
 )
 
-// Article represents a generated daily article.
+// fixJSONContent escapes literal newlines and tabs inside JSON string values so the JSON is valid.
+// GLM and some other models return content with actual newline/tab chars inside JSON string fields.
+func fixJSONContent(content string) string {
+	// Fast path: try parsing directly
+	var dummy map[string]interface{}
+	if json.Unmarshal([]byte(content), &dummy) == nil {
+		return content
+	}
+	// State machine: find real newlines/tabs inside JSON string values and escape them
+	var result []byte
+	inString := false
+	i := 0
+	for i < len(content) {
+		c := content[i]
+		if !inString {
+			result = append(result, c)
+			if c == '"' {
+				inString = true
+			}
+			i++
+			continue
+		}
+		// Inside a JSON string
+		if c == '\\' && i+1 < len(content) {
+			// Escaped char: copy both chars as-is
+			result = append(result, c, content[i+1])
+			i += 2
+			continue
+		}
+		if c == '"' {
+			// End of string
+			result = append(result, c)
+			inString = false
+			i++
+			continue
+		}
+		// Real newline inside string value → escape it
+		if c == '\n' {
+			result = append(result, '\\', 'n')
+			i++
+			continue
+		}
+		// Real tab inside string value → escape it
+		if c == '\t' {
+			result = append(result, '\\', 't')
+			i++
+			continue
+		}
+		// Any other char
+		result = append(result, c)
+		i++
+	}
+	return string(result)
+}
 type Article struct {
 	ID         int64  `json:"id"`
 	Title      string `json:"title"`
@@ -36,12 +89,6 @@ type ArticleListResult struct {
 // ArticleService handles daily article generation and storage.
 type ArticleService struct {
 	db *sql.DB
-}
-
-// ArticleGenerationRecord tracks daily generation usage.
-type ArticleGenerationRecord struct {
-	Date  string `json:"date"`
-	Count int    `json:"count"`
 }
 
 func NewArticleService() *ArticleService {
@@ -99,173 +146,47 @@ func (s *ArticleService) migrate() error {
 	return nil
 }
 
-// ── Daily Limit Helpers ──────────────────────────────────────────────
-
-const articleDailyLimit = 3
-
-func articleSettingsPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".ensher", "settings.json"), nil
-}
-
-func (svc *ArticleService) getArticleGenerations() ([]ArticleGenerationRecord, error) {
-	path, err := articleSettingsPath()
-	if err != nil {
-		return nil, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []ArticleGenerationRecord{}, nil
-		}
-		return nil, err
-	}
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-	gen, ok := raw["articleGenerations"]
-	if !ok {
-		return []ArticleGenerationRecord{}, nil
-	}
-	var records []ArticleGenerationRecord
-	for _, r := range gen.([]interface{}) {
-		rec := r.(map[string]interface{})
-		records = append(records, ArticleGenerationRecord{
-			Date:  rec["date"].(string),
-			Count: int(rec["count"].(float64)),
-		})
-	}
-	return records, nil
-}
-
-func (s *ArticleService) saveArticleGenerations(records []ArticleGenerationRecord) error {
-	path, err := articleSettingsPath()
-	if err != nil {
-		return err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	var settings map[string]interface{}
-	if err == nil {
-		json.Unmarshal(data, &settings)
-	} else {
-		settings = make(map[string]interface{})
-	}
-	settings["articleGenerations"] = records
-	settings["articleLimit"] = articleDailyLimit
-
-	out, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, out, 0600)
-}
-
-func (s *ArticleService) getTodayGenerationCount() int {
-	records, err := s.getArticleGenerations()
-	if err != nil {
-		return 0
-	}
-	today := time.Now().Format("2006-01-02")
-	for _, r := range records {
-		if r.Date == today {
-			return r.Count
-		}
-	}
-	return 0
-}
-
 // ── Public API ──────────────────────────────────────────────────────
 
-// GetRemainingGenerations returns how many generations are left today.
-func (s *ArticleService) GetRemainingGenerations() (int, error) {
-	count := s.getTodayGenerationCount()
-	remaining := articleDailyLimit - count
-	if remaining < 0 {
-		remaining = 0
-	}
-	return remaining, nil
-}
-
-// GenerateDailyArticle generates an article using today's new and review words.
+// GenerateDailyArticle generates an article using randomly selected eligible words (max 40).
 func (s *ArticleService) GenerateDailyArticle() (*Article, error) {
-	// Check daily limit
-	count := s.getTodayGenerationCount()
-	if count >= articleDailyLimit {
-		return nil, fmt.Errorf("daily generation limit reached (%d/%d)", count, articleDailyLimit)
-	}
-
-	// Get today's new words (mastery_level=0, created today)
+	// Query eligible words: today's new words + words due for spaced-repetition review.
+	// RANDOM() gives uniform random ordering; LIMIT 40 caps total.
 	rows, err := s.db.Query(`
 		SELECT id, word FROM words
-		WHERE mastery_level = 0 AND DATE(created_at) = DATE('now')
-		LIMIT 20`)
+		WHERE
+			-- Today's new words (never reviewed)
+			(mastery_level = 0 AND DATE(created_at) = DATE('now'))
+			OR
+			-- Words due for review: reviewed before, mastery < 5
+			(mastery_level > 0 AND mastery_level < 5 AND last_reviewed_at IS NOT NULL AND last_reviewed_at != '')
+		ORDER BY RANDOM()
+		LIMIT 40
+	`)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query new words: %w", err)
+		return nil, fmt.Errorf("failed to query eligible words: %w", err)
 	}
+	defer rows.Close()
 
-	var newWords []struct {
-		ID   int64
-		Word string
-	}
-	for rows.Next() {
-		var id int64
-		var word string
-		rows.Scan(&id, &word)
-		newWords = append(newWords, struct{ ID int64; Word string }{id, word})
-	}
-	rows.Close()
-
-	// Get review words (mastery_level < 5, reviewed today or never reviewed but not new)
-	reviewRows, err := s.db.Query(`
-		SELECT id, word FROM words
-		WHERE mastery_level > 0 AND mastery_level < 5
-		AND (DATE(last_reviewed_at) = DATE('now') OR last_reviewed_at = '')
-		LIMIT 20`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query review words: %w", err)
-	}
-	defer reviewRows.Close()
-
-	var reviewWords []struct {
-		ID   int64
-		Word string
-	}
-	for reviewRows.Next() {
-		var id int64
-		var word string
-		reviewRows.Scan(&id, &word)
-		reviewWords = append(reviewWords, struct{ ID int64; Word string }{id, word})
-	}
-
-	// Combine all words
 	var allWords []string
 	var wordIDs []int64
 	seen := make(map[string]bool)
-	for _, w := range newWords {
-		if !seen[w.Word] {
-			seen[w.Word] = true
-			allWords = append(allWords, w.Word)
-			wordIDs = append(wordIDs, w.ID)
+	for rows.Next() {
+		var id int64
+		var word string
+		if err := rows.Scan(&id, &word); err != nil {
+			return nil, fmt.Errorf("failed to scan word: %w", err)
 		}
-	}
-	for _, w := range reviewWords {
-		if !seen[w.Word] {
-			seen[w.Word] = true
-			allWords = append(allWords, w.Word)
-			wordIDs = append(wordIDs, w.ID)
+		if !seen[word] {
+			seen[word] = true
+			allWords = append(allWords, word)
+			wordIDs = append(wordIDs, id)
 		}
 	}
 
 	// If no words available, return an error with a helpful message
 	if len(allWords) == 0 {
-		return nil, fmt.Errorf("no new or review words available today. Please add new words or complete some reviews first.")
+		return nil, fmt.Errorf("no eligible words found. Please add new words or complete some reviews first.")
 	}
 
 	// Build word list for prompt
@@ -308,31 +229,7 @@ func (s *ArticleService) GenerateDailyArticle() (*Article, error) {
 		CreatedAt: time.Now().Format("2006-01-02 15:04:05"),
 	}
 
-	// Increment generation count
-	s.incrementGenerationCount()
-
 	return article, nil
-}
-
-func (s *ArticleService) incrementGenerationCount() {
-	records, _ := s.getArticleGenerations()
-	today := time.Now().Format("2006-01-02")
-	found := false
-	for i, r := range records {
-		if r.Date == today {
-			records[i].Count++
-			found = true
-			break
-		}
-	}
-	if !found {
-		records = append(records, ArticleGenerationRecord{Date: today, Count: 1})
-	}
-	// Keep only last 30 days
-	if len(records) > 30 {
-		records = records[len(records)-30:]
-	}
-	s.saveArticleGenerations(records)
 }
 
 // GetAllArticles returns all articles ordered by date descending.
@@ -539,12 +436,17 @@ func generateArticleWithAI(wordList string, wordCount int) (*articleAIResult, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AI settings: %w", err)
 	}
-	if settings.APIKey == "" {
-		return nil, fmt.Errorf("AI API key not configured. Please set it in Settings.")
+	cfg, ok := settings.Providers[settings.Provider]
+	if !ok || cfg.APIKey == "" {
+		return nil, fmt.Errorf("AI API key not configured for %s. Please set it in Settings.", settings.Provider)
 	}
 	switch settings.Provider {
 	case "minimax":
-		return generateArticleWithMiniMax(wordList, wordCount, settings.APIKey, settings.ModelName)
+		return generateArticleWithMiniMax(wordList, wordCount, cfg.APIKey, cfg.ModelName)
+	case "atomgit":
+		return generateArticleWithAtomGit(wordList, wordCount, cfg.APIKey, cfg.ModelName)
+	case "zhipu":
+		return generateArticleWithZhipu(wordList, wordCount, cfg.APIKey, cfg.ModelName)
 	default:
 		return nil, fmt.Errorf("unsupported AI provider: %s", settings.Provider)
 	}
@@ -618,6 +520,165 @@ Return ONLY valid JSON (no markdown, no code fences):
 	content = strings.TrimPrefix(content, "```")
 	content = strings.TrimSuffix(content, "```")
 	content = strings.TrimSpace(content)
+	content = fixJSONContent(content)
+
+	var r articleAIResult
+	if err := json.Unmarshal([]byte(content), &r); err != nil {
+		return nil, fmt.Errorf("AI returned invalid JSON: %s", content)
+	}
+	return &r, nil
+}
+
+func generateArticleWithAtomGit(wordList string, wordCount int, apiKey, modelName string) (*articleAIResult, error) {
+	prompt := fmt.Sprintf(`You are an expert English writing assistant. Your task is to write a creative, engaging English article.
+
+VOCABULARY WORDS TO INCORPORATE: %s
+
+Requirements:
+1. Write a 400-500 word English article that naturally incorporates the vocabulary words above.
+2. The article should be interesting, well-structured (with a clear beginning, middle, and end).
+3. Use the vocabulary words in context naturally — do not force them awkwardly.
+4. At the end, provide a Chinese translation of the entire article.
+
+Return ONLY valid JSON (no markdown, no code fences):
+{
+  "title": "A creative, catchy article title in English (max 60 characters)",
+  "content": "The full English article (400-500 words)",
+  "contentZh": "The complete Chinese translation of the article",
+  "topic": "A single topic label from this list: General, Technology, Science, Daily Life, Travel, Food, Business, Nature, Health, Education, Entertainment, Culture, Sports, History"
+}
+`, wordList)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"model": modelName,
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are an expert English writing assistant. Always respond with valid JSON only."},
+			{"role": "user", "content": prompt},
+		},
+		"max_tokens": 2048,
+		"temperature": 0.7,
+	})
+
+	req, err := http.NewRequest("POST", "https://api-ai.gitcode.com/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if result.Error.Message != "" {
+		return nil, fmt.Errorf("AtomGit API error: %s", result.Error.Message)
+	}
+	if len(result.Choices) == 0 {
+		return nil, fmt.Errorf("no response from AI")
+	}
+
+	content := strings.TrimSpace(result.Choices[0].Message.Content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+	content = fixJSONContent(content)
+
+	var r articleAIResult
+	if err := json.Unmarshal([]byte(content), &r); err != nil {
+		return nil, fmt.Errorf("AI returned invalid JSON: %s", content)
+	}
+	return &r, nil
+}
+
+func generateArticleWithZhipu(wordList string, wordCount int, apiKey, modelName string) (*articleAIResult, error) {
+	prompt := fmt.Sprintf(`You are an expert English writing assistant. Your task is to write a creative, engaging English article.
+
+VOCABULARY WORDS TO INCORPORATE: %s
+
+Requirements:
+1. Write a 400-500 word English article that naturally incorporates the vocabulary words above.
+2. The article should be interesting, well-structured (with a clear beginning, middle, and end).
+3. Use the vocabulary words in context naturally — do not force them awkwardly.
+4. At the end, provide a Chinese translation of the entire article.
+
+Return ONLY valid JSON (no markdown, no code fences):
+{
+  "title": "A creative, catchy article title in English (max 60 characters)",
+  "content": "The full English article (400-500 words)",
+  "contentZh": "The complete Chinese translation of the article",
+  "topic": "A single topic label from this list: General, Technology, Science, Daily Life, Travel, Food, Business, Nature, Health, Education, Entertainment, Culture, Sports, History"
+}
+`, wordList)
+
+	body, _ := json.Marshal(map[string]interface{}{
+		"model": modelName,
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are an expert English writing assistant. Always respond with valid JSON only."},
+			{"role": "user", "content": prompt},
+		},
+		"max_tokens": 2048,
+		"temperature": 0.7,
+	})
+
+	req, err := http.NewRequest("POST", "https://open.bigmodel.cn/api/paas/v4/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if result.Error.Message != "" {
+		return nil, fmt.Errorf("智谱 GLM API error: %s", result.Error.Message)
+	}
+	if len(result.Choices) == 0 {
+		return nil, fmt.Errorf("no response from AI")
+	}
+
+	content := strings.TrimSpace(result.Choices[0].Message.Content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+	content = fixJSONContent(content)
 
 	var r articleAIResult
 	if err := json.Unmarshal([]byte(content), &r); err != nil {

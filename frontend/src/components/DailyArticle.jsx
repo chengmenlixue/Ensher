@@ -12,7 +12,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
   const [topicFilter, setTopicFilter] = useState('All');
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [showZh, setShowZh] = useState(true);
-  const [remaining, setRemaining] = useState(3);
+  const [deleteId, setDeleteId] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generatingError, setGeneratingError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -44,12 +44,10 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [dates, rem] = await Promise.all([
+      const [dates] = await Promise.all([
         ArticleService.GetArticleDates(),
-        ArticleService.GetRemainingGenerations(),
       ]);
       setAllDates(dates || []);
-      setRemaining(rem);
       await loadArticles(1, false);
     } catch(e) {
       console.error('Failed to load articles:', e);
@@ -107,7 +105,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
 
   // Generate article
   const handleGenerate = async () => {
-    if (generating || remaining <= 0) return;
+    if (generating) return;
     setGenerating(true);
     setGeneratingError('');
     try {
@@ -121,13 +119,25 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
         if (dateStr && !allDates.includes(dateStr)) {
           setAllDates(prev => [dateStr, ...prev].sort().reverse());
         }
-        setRemaining(prev => prev - 1);
         setSelectedArticle(article);
       }
     } catch(e) {
       setGeneratingError(e.message || '生成失败，请重试');
     }
     setGenerating(false);
+  };
+
+  // Delete article
+  const handleDelete = async (articleId) => {
+    setDeleteId(null);
+    try {
+      await ArticleService.DeleteArticle(articleId);
+      setArticles(prev => prev.filter(a => a.id !== articleId));
+      setTotal(prev => prev - 1);
+      if (selectedArticle?.id === articleId) setSelectedArticle(null);
+    } catch(err) {
+      console.error('Delete failed:', err);
+    }
   };
 
   // Highlight words in content
@@ -282,6 +292,13 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               <span className={`badge ${topicBadgeClass(selectedArticle.topic)} ml-4 flex-shrink-0`}>
                 {selectedArticle.topic}
               </span>
+              <button
+                onClick={() => setDeleteId(selectedArticle.id)}
+                className="ml-2 text-gray-300 hover:text-rose-500 transition-colors text-xs flex-shrink-0"
+                title="Delete article"
+              >
+                ✕ Delete
+              </button>
             </div>
 
             {/* Toggle bilingual */}
@@ -323,6 +340,29 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               </div>
             )}
           </div>
+
+          {/* Delete confirmation dialog */}
+          {deleteId && (
+            <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+              <div className="neu-card p-6 w-72 text-center">
+                <p className="text-sm font-semibold text-gray-700 mb-4">Delete this article?</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteId(null)}
+                    className="btn btn-soft flex-1 py-2 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDelete(deleteId)}
+                    className="btn flex-1 py-2 text-sm bg-rose-500 text-white hover:bg-rose-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -336,6 +376,30 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
           <div className="progress-fill animate-shimmer" style={{ width: '60%', background: 'linear-gradient(90deg, #10b981, #34d399, #10b981)', backgroundSize: '200% 100%' }} />
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="neu-card p-6 w-72 text-center">
+            <p className="text-sm font-semibold text-gray-700 mb-4">Delete this article?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="btn btn-soft flex-1 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteId)}
+                className="btn flex-1 py-2 text-sm bg-rose-500 text-white hover:bg-rose-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-6 pt-6 pb-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
@@ -347,14 +411,14 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
           </div>
           <button
             onClick={handleGenerate}
-            disabled={generating || remaining <= 0 || !aiEnabled}
+            disabled={generating || !aiEnabled}
             className={`btn btn-primary btn-sm flex items-center gap-2 ${generating || !aiEnabled ? 'opacity-70' : ''}`}
             title={!aiEnabled ? 'AI 功能已关闭，请在设置中开启' : ''}
           >
             {generating ? (
               <><span className="animate-spin-slow text-sm">⟳</span> Generating...</>
             ) : (
-              <><span>✨</span> Generate <span className="text-white/70 text-xs">({remaining}/3)</span></>
+              <><span>✨</span> Generate</>
             )}
           </button>
         </div>
@@ -459,9 +523,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               <p className="text-xs text-gray-400">
                 {searchQuery || topicFilter !== 'All' || selectedDate
                   ? 'Try adjusting your filters'
-                  : remaining > 0
-                    ? 'Click "Generate" to create your first article!'
-                    : 'Daily generation limit reached. Come back tomorrow!'
+                  : 'Ready to generate your first article!'
                 }
               </p>
             </div>
@@ -480,6 +542,13 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                     <span className={`badge ${topicBadgeClass(article.topic)} flex-shrink-0`}>
                       {article.topic}
                     </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteId(article.id); }}
+                      className="ml-2 text-gray-300 hover:text-rose-500 transition-colors text-xs flex-shrink-0"
+                      title="Delete article"
+                    >
+                      ✕
+                    </button>
                   </div>
                   <p className="text-xs text-gray-400 mb-2">{articleDateLabel(article.createdAt)}</p>
                   <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">

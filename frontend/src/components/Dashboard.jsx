@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
 
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'Good morning!';
+  if (h >= 12 && h < 18) return 'Good afternoon!';
+  return 'Good evening!';
+}
+
 export default function Dashboard({ onNav }) {
   const [stats, setStats] = useState(null);
   const [loadError, setLoadError] = useState(false);
+  const [greeting, setGreeting] = useState(getGreeting);
   useEffect(() => {
     WordService.GetStats()
       .then(s => { setStats(s); setLoadError(false); })
@@ -31,7 +39,7 @@ export default function Dashboard({ onNav }) {
   return (
     <div className="flex-1 overflow-auto p-8 animate-fade-in">
       <div className="max-w-2xl">
-        <h2 className="text-2xl font-bold text-gray-700 mb-1">Good evening!</h2>
+        <h2 className="text-2xl font-bold text-gray-700 mb-1">{greeting}</h2>
         <p className="text-sm text-gray-400 mb-8">Here's your learning overview.</p>
 
         {/* Stat cards */}
@@ -44,7 +52,7 @@ export default function Dashboard({ onNav }) {
             { label: 'Reviewed', value: stats.reviewed },
           ].map(s => (
             <div key={s.label} className="neu-card p-4 animate-slide-up">
-              <p className="text-2xl font-bold text-gray-800">{s.value}</p>
+              <p className="text-2xl font-bold stat-number">{s.value}</p>
               <p className="text-[10px] text-gray-400 mt-1.5 font-semibold uppercase tracking-wider">{s.label}</p>
             </div>
           ))}

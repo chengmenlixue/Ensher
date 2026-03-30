@@ -9,6 +9,7 @@ export default function AddWord({ onAdded }) {
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [aiFilled, setAiFilled] = useState(false); // tracks if AI was successfully triggered
   const [msg, setMsg] = useState(null);
   const [existingId, setExistingId] = useState(null);
 
@@ -28,7 +29,10 @@ export default function AddWord({ onAdded }) {
     }
   }, [editWord]);
 
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const set = (k) => (e) => {
+    setForm({ ...form, [k]: e.target.value });
+    if (k === 'word') setAiFilled(false);
+  };
 
   // Check if word exists — returns existing word object or null
   const checkExisting = async (word) => {
@@ -47,6 +51,7 @@ export default function AddWord({ onAdded }) {
       checkExisting(form.word).then(existing => {
         if (existing) {
           setExistingId(existing.id);
+          setAiFilled(true);
           setForm(prev => ({
             ...prev,
             phonetic: prev.phonetic || existing.phonetic || '',
@@ -100,6 +105,7 @@ export default function AddWord({ onAdded }) {
               notes: result.notes || prev.notes,
               tags: result.tags || prev.tags,
             }));
+            setAiFilled(true);
           } catch (err) { setAiError(err.toString()); }
           setAiLoading(false);
         },
@@ -120,6 +126,7 @@ export default function AddWord({ onAdded }) {
         notes: result.notes || prev.notes,
         tags: result.tags || prev.tags,
       }));
+      setAiFilled(true);
     } catch (err) { setAiError(err.toString()); }
     setAiLoading(false);
   };
@@ -183,6 +190,7 @@ export default function AddWord({ onAdded }) {
   const resetForm = () => {
     setForm({ word: '', phonetic: '', definition: '', definitionZh: '', example: '', notes: '', tags: '' });
     setExistingId(null);
+    setAiFilled(false);
     if (editWord) setEditWord(null);
   };
 
@@ -204,7 +212,7 @@ export default function AddWord({ onAdded }) {
             )}
             <button
               onClick={handleSubmit}
-              disabled={saving || !form.word.trim()}
+              disabled={saving || !form.word.trim() || (aiEnabled && !editWord && !aiFilled)}
               className="btn btn-primary px-5 py-2.5 flex items-center gap-2"
             >
               {saving ? (

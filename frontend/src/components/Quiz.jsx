@@ -1,47 +1,173 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
 import * as AIService from "../../bindings/ensher/aiservice";
 import { useAI } from '../App';
 
+// ── Mode definitions ─────────────────────────────────────────────────────────
+const MODES = [
+  { id: 'recall',  label: '回忆模式', sub: '看中文拼写单词' },
+  { id: 'judge',   label: '认知模式', sub: '看英文判断是否认识' },
+];
+
+// ── Spelling input: underline-style text field ────────────────────────────────
+function SpellInput({ word, value, onChange, onSubmit }) {
+  const inputRef = useRef(null);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); onSubmit(); }
+  };
+
+  return (
+    <div className="w-full" onClick={() => inputRef.current?.focus()}>
+      {/* Underline field */}
+      <div
+        className="neu-pressed-sm rounded-xl px-4 pt-5 pb-2 cursor-text relative"
+        style={{ userSelect: 'none', minHeight: 64 }}
+        onClick={() => inputRef.current?.focus()}
+      >
+        {/* Underline + letter render */}
+        <div className="flex items-end justify-center gap-3" style={{ minHeight: 40 }}>
+          {word.split('').map((ch, i) => {
+            const typed = value[i] || '';
+            const correct = typed && typed.toLowerCase() === ch.toLowerCase();
+            return (
+              <div key={i} className="relative flex flex-col items-center" style={{ width: 28 }}>
+                {/* Letter or placeholder */}
+                <span
+                  className={`text-2xl font-bold transition-all duration-150 ${
+                    correct ? 'spell-correct-text' : typed ? 'text-gray-700 dark:text-gray-200' : 'text-transparent'
+                  }`}
+                  style={{ fontFamily: 'inherit', lineHeight: 1, height: 36, display: 'flex', alignItems: 'flex-end' }}
+                >
+                  {typed || ch}
+                </span>
+                {/* Underline */}
+                <div
+                  className={`w-full rounded-full transition-all duration-150 ${correct ? 'spell-underline' : 'spell-underline-empty'}`}
+                  style={{ height: 3, marginTop: 2 }}
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Blinking cursor — positioned at current input index */}
+        {value.length < word.length && (
+          <div className="pointer-events-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+            <div className="spell-cursor-bar" style={{
+              position: 'absolute',
+              left: `calc(50% - ${(word.length * 28 + Math.max(0, word.length - 1) * 12) / 2}px + ${value.length * 28 + Math.max(0, value.length - 1) * 12}px + 14px - 1px)`,
+              bottom: 10,
+            }} />
+          </div>
+        )}
+      </div>
+
+      {/* Hidden real input */}
+      <input
+        ref={inputRef}
+        className="sr-only"
+        value={value}
+        onChange={e => {
+          const filtered = e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, word.length);
+          onChange(filtered);
+        }}
+        onKeyDown={handleKeyDown}
+        autoFocus
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        aria-label="Spell the word"
+      />
+
+      {/* Hint */}
+      <p className="text-center text-xs text-gray-400 mt-1.5">点击输入或直接打字</p>
+    </div>
+  );
+}
+
+
+// ── Spelling sub-states ──────────────────────────────────────────────────────
+const SPELL_NONE = 0;
+const SPELL_DONE  = 1;
+
 export default function Quiz() {
   const { aiEnabled } = useAI();
-  const [words, setWords] = useState([]);
-  const [idx, setIdx] = useState(0);
-  const [show, setShow] = useState(false);
-  const [done, setDone] = useState(false);
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [userAnswer, setUserAnswer] = useState('');
-  const [judging, setJudging] = useState(false);
-  const [judgment, setJudgment] = useState(null); // {correct, judgment, advice}
-  const [dailyLimit, setDailyLimit] = useState(20);
-  const [known, setKnown] = useState(null); // null = not chosen yet, false = don't know, true = know it
-  const [answered, setAnswered] = useState(false); // prevents double-submit
 
+  // ── Core state ────────────────────────────────────────────────────────────
+  const [mode, setMode]           = useState('recall'); // 'judge' | 'recall'
+  const [words, setWords]         = useState([]);
+  const [idx, setIdx]             = useState(0);
+  const [done, setDone]           = useState(false);
+  const [results, setResults]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+
+  // ── Judge mode ────────────────────────────────────────────────────────────
+  const [show, setShow]           = useState(false);
+  const [known, setKnown]         = useState(null);
+  const [answered, setAnswered]   = useState(false);
+  const [userAnswer, setUserAnswer] = useState('');
+  const [judging, setJudging]     = useState(false);
+  const [judgment, setJudgment]   = useState(null);
+
+  // ── Recall (spelling) mode ────────────────────────────────────────────────
+  const [spellState, setSpellState] = useState(SPELL_NONE);
+  const [spellInput, setSpellInput] = useState('');
+  const [spellCorrect, setSpellCorrect] = useState(null);
+  const handleContinueRef = useRef(null);
+
+  // ── Daily limit (kept for hint display) ──────────────────────────────────
+  const [dailyLimit, setDailyLimit] = useState(20);
   useEffect(() => {
     WordService.GetReviewSettings().then(s => {
       if (s) setDailyLimit(s.dailyLimit);
     }).catch(() => {});
   }, []);
 
+  // ── Load words ────────────────────────────────────────────────────────────
+  const resetState = () => {
+    setIdx(0); setDone(false); setResults([]);
+    setShow(false); setKnown(null); setAnswered(false);
+    setUserAnswer(''); setJudgment(null);
+    setSpellState(SPELL_NONE); setSpellInput('');
+    setSpellCorrect(null);
+  };
+
   const load = async () => {
     setLoading(true);
+    resetState();
     try {
       const w = await WordService.GetWordsForReview();
       setWords(w || []);
-      setIdx(0); setShow(false); setDone(false); setResults([]);
-      setUserAnswer(''); setJudgment(null);
-      setKnown(null); setAnswered(false);
-    } catch(e){console.error(e)}
+    } catch(e) { console.error(e); }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
 
-  // User chooses Know / Don't Know — reveals answer
+  // ── Mode switch: reload words ─────────────────────────────────────────────
+  const switchMode = (m) => {
+    if (m === mode) return;
+    setMode(m);
+    load();
+  };
+
+  // ── Global Enter key → Continue / Next ───────────────────────────────────
+  useEffect(() => {
+    if (!((mode === 'recall' && spellState === SPELL_DONE) || (mode === 'judge' && show))) return;
+    const handler = (e) => {
+      if (e.key === 'Enter' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        handleContinueRef.current?.();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [mode, spellState, show]);
+
+  // ── Judge mode handlers ───────────────────────────────────────────────────
   const handleChoose = (k) => {
-    setKnown(k);
-    setShow(true);
+    setKnown(k); setShow(true);
     if (!answered) {
       setAnswered(true);
       const w = words[idx];
@@ -49,7 +175,6 @@ export default function Quiz() {
     }
   };
 
-  // Submit AI judgment (only available when known=true)
   const submitJudgment = async () => {
     if (!userAnswer.trim() || judging) return;
     const w = words[idx];
@@ -63,21 +188,41 @@ export default function Quiz() {
     setJudging(false);
   };
 
-  // Continue button — moves to next word
+  // ── Recall mode handlers ──────────────────────────────────────────────────
+  const submitSpell = async () => {
+    if (!spellInput.trim() || spellState !== SPELL_NONE) return;
+    const w = words[idx];
+    const correct = spellInput.trim().toLowerCase() === w.word.toLowerCase();
+    setSpellCorrect(correct);
+    setSpellState(SPELL_DONE);
+  };
+
+  const spellRetry = () => {
+    setSpellState(SPELL_NONE);
+    setSpellInput('');
+    setSpellCorrect(null);
+    setSpellAiResult(null);
+    spellInputRef.current?.focus();
+  };
+
+  // ── Continue ──────────────────────────────────────────────────────────────
   const handleContinue = () => {
     if (idx + 1 >= words.length) {
       setTimeout(() => setDone(true), 400);
     } else {
       setIdx(prev => prev + 1);
-      setShow(false);
-      setKnown(null);
-      setAnswered(false);
-      setUserAnswer('');
-      setJudgment(null);
+      setShow(false); setKnown(null); setAnswered(false);
+      setUserAnswer(''); setJudgment(null);
+      setSpellState(SPELL_NONE); setSpellInput('');
+      setSpellCorrect(null);
     }
   };
+  handleContinueRef.current = handleContinue;
 
-  if (loading) return <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse">Loading...</div>;
+  // ── Loading / Empty ──────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse">Loading...</div>
+  );
 
   if (words.length === 0) return (
     <div className="flex-1 flex items-center justify-center animate-fade-in">
@@ -90,6 +235,7 @@ export default function Quiz() {
     </div>
   );
 
+  // ── Results ───────────────────────────────────────────────────────────────
   if (done) {
     const correct = results.filter(r => r.correct).length;
     const pct = results.length > 0 ? Math.round((correct / results.length) * 100) : 0;
@@ -107,11 +253,169 @@ export default function Quiz() {
     );
   }
 
-  const w = words[idx];
+  const w = words[idx];  // ══════════════════════════════════════════════════════════════════════════
+  //  RECALL MODE (Spelling)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (mode === 'recall') {
+    return (
+      <div className="flex-1 overflow-auto p-8 animate-fade-in">
+        <div className="max-w-lg mx-auto">
 
+          {/* Mode Toggle */}
+          <div className="neu-raised-sm p-1 flex gap-1 mb-6">
+            {MODES.map(m => (
+              <button key={m.id} onClick={() => switchMode(m.id)}
+                className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition-all duration-200 ${
+                  mode === m.id
+                    ? 'neu-pressed-sm text-gray-700 dark:text-gray-200'
+                    : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+                }`}>
+                <span className="block font-bold">{m.label}</span>
+                <span className="block text-[10px] font-normal mt-0.5 opacity-70">{m.sub}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-gray-700">拼写练习</h2>
+            <span className="badge badge-sky text-sky-700">{idx+1} / {words.length}</span>
+          </div>
+
+          {/* Progress */}
+          <div className="progress-track mb-6 h-2">
+            <div className="progress-fill" style={{ width: `${(idx / words.length) * 100}%`, background: 'linear-gradient(90deg, #10b981, #34d399)' }} />
+          </div>
+
+          {/* Main card */}
+          <div className="neu-card p-8 mb-4">
+
+            {/* Prompt: Chinese meaning — always visible */}
+            <div className="text-center mb-5">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">请拼写出这个单词</p>
+              <p className="text-2xl font-bold text-gray-700 dark:text-gray-100 leading-snug">
+                {w.definitionZh || w.definition || '—'}
+              </p>
+            </div>
+
+            {/* Input area — letter slots as input */}
+            {spellState === SPELL_NONE && (
+              <div className="space-y-4 animate-fade-in">
+                <SpellInput
+                  word={w.word}
+                  value={spellInput}
+                  onChange={setSpellInput}
+                  onSubmit={submitSpell}
+                  submitDisabled={!spellInput.trim() || spellInput.length < w.word.length}
+                />
+                <button
+                  onClick={submitSpell}
+                  disabled={spellInput.length < w.word.length}
+                  className="btn btn-primary w-full py-3 text-base"
+                >
+                  提交
+                </button>
+                <p className="text-center text-xs text-gray-400">
+                  输入全部字母后按 Enter 或点击提交
+                </p>
+              </div>
+            )}
+
+            {/* Result: correct */}
+            {spellState === SPELL_DONE && spellCorrect === true && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="neu-pressed-sm p-4 text-center border-2 border-emerald-300 dark:border-emerald-500 rounded-2xl">
+                  <p className="text-4xl mb-2">✅</p>
+                  <p className="text-base font-bold text-emerald-600">Correct!</p>
+                  <p className="text-2xl font-bold word-display mt-1">{w.word}</p>
+                  {w.phonetic && <p className="text-sm word-display-phonetic mt-0.5">{w.phonetic}</p>}
+                </div>
+
+                {/* Definition */}
+                {w.definition && (
+                  <div className="neu-pressed-sm p-4">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition</p>
+                    <p className="text-sm text-gray-600">{w.definition}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Result: incorrect */}
+            {spellState === SPELL_DONE && spellCorrect === false && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="neu-pressed-sm p-4 text-center border-2 border-rose-300 dark:border-rose-500 rounded-2xl">
+                  <p className="text-4xl mb-2">❌</p>
+                  <p className="text-sm font-bold text-rose-500 mb-2">Wrong!</p>
+                  <p className="text-sm text-gray-400 line-through decoration-rose-400">{spellInput}</p>
+                  <p className="text-2xl font-bold word-display mt-1">{w.word}</p>
+                  {w.phonetic && <p className="text-sm word-display-phonetic mt-0.5">{w.phonetic}</p>}
+                </div>
+
+                {/* Definition */}
+                {w.definition && (
+                  <div className="neu-pressed-sm p-4">
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition</p>
+                    <p className="text-sm text-gray-600">{w.definition}</p>
+                  </div>
+                )}
+                {w.definitionZh && (
+                  <div className="neu-pressed-sm p-4">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">中文释义</p>
+                    <p className="text-sm text-gray-500">{w.definitionZh}</p>
+                  </div>
+                )}
+                {w.example && (
+                  <div className="neu-pressed-sm p-4">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Example</p>
+                    <p className="text-sm text-gray-500 italic">{w.example}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Done state: action buttons */}
+            {spellState === SPELL_DONE && (
+              <div className="flex gap-3 mt-4">
+                <button onClick={spellRetry} className="btn btn-soft flex-1">重新尝试</button>
+                <button onClick={handleContinue} className="btn btn-primary flex-1">
+                  {idx + 1 >= words.length ? 'Finish ✓' : 'Next →'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Hint */}
+          {spellState === SPELL_NONE && (
+            <p className="text-center text-xs text-gray-400">每日复习上限 {dailyLimit} 词 · 可在 Settings 调整</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  JUDGE MODE (Original — recognize English word)
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="flex-1 overflow-auto p-8 animate-fade-in">
       <div className="max-w-lg mx-auto">
+
+        {/* Mode Toggle */}
+        <div className="neu-raised-sm p-1 flex gap-1 mb-6">
+          {MODES.map(m => (
+            <button key={m.id} onClick={() => switchMode(m.id)}
+              className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition-all duration-200 ${
+                mode === m.id
+                  ? 'neu-pressed-sm text-gray-700 dark:text-gray-200'
+                  : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
+              }`}>
+              <span className="block font-bold">{m.label}</span>
+              <span className="block text-[10px] font-normal mt-0.5 opacity-70">{m.sub}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-gray-700">Daily Review</h2>
@@ -125,13 +429,13 @@ export default function Quiz() {
 
         {/* Word Card */}
         <div className="neu-card p-8 mb-6">
-          <p className="text-3xl font-bold text-gray-800 mb-1">{w.word}</p>
-          {w.phonetic && <p className="text-sm text-gray-400 mb-6">{w.phonetic}</p>}
+          <p className="text-3xl font-bold word-display mb-1">{w.word}</p>
+          {w.phonetic && <p className="text-sm word-display-phonetic mb-6">{w.phonetic}</p>}
 
-          {/* Step 1: Know or not (only shown when show=false) */}
+          {/* Step 1: Know or not */}
           {!show && (
             <div className="mt-4">
-              <p className="text-xs text-gray-400 mb-5 uppercase tracking-wider font-semibold">Do you know this?</p>
+              <p className="text-xs text-gray-400 mb-5 uppercase tracking-wider font-semibold text-center">Do you know this?</p>
               <div className="flex gap-4 justify-center">
                 <button onClick={() => handleChoose(false)} className="btn btn-soft text-rose-500">✗ Don't know</button>
                 <button onClick={() => handleChoose(true)} className="btn btn-primary">✓ I know it!</button>
@@ -139,7 +443,7 @@ export default function Quiz() {
             </div>
           )}
 
-          {/* Step 2: Reveal (shown when show=true) */}
+          {/* Step 2: Reveal */}
           {show && (
             <div className="space-y-4 animate-fade-in">
               {/* Knowledge indicator */}
@@ -147,7 +451,7 @@ export default function Quiz() {
                 {known === false ? '✗ Did not know' : '✓ Knew it!'}
               </div>
 
-              {/* ── AI enabled + "I know it!" → wait for AI judgment ── */}
+              {/* AI input when "I know it!" */}
               {known === true && aiEnabled && !judgment && (
                 <div className="neu-pressed-sm p-4">
                   <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">用中文写出你的理解</p>
@@ -193,7 +497,7 @@ export default function Quiz() {
                 </div>
               )}
 
-              {/* ── Definition + Example: shown after AI correct, OR Don't Know, OR AI disabled ── */}
+              {/* Definition + Example */}
               {(known === false || (known === true && (!aiEnabled || (judgment && judgment.correct === true)))) && (
                 <>
                   <div className="neu-pressed-sm p-4 border-2 border-emerald-300">
@@ -218,7 +522,7 @@ export default function Quiz() {
           )}
         </div>
 
-        {/* Settings hint */}
+        {/* Hint */}
         {!show && (
           <p className="text-center text-xs text-gray-400">
             每日复习上限 {dailyLimit} 词 · 可在 Settings 调整

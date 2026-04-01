@@ -122,19 +122,31 @@ func (s *QuickLookupService) ShowWidget() {
 		fmt.Println("QuickLookup: re-showing existing widget")
 		s.widget.Show()
 		s.widget.Focus()
+		// Re-raise above fullscreen on re-show
+		if native := s.widget.NativeWindow(); native != nil {
+			application.InvokeSync(func() {
+				SetWidgetWindowLevelGo(uintptr(native))
+			})
+		}
 		return
 	}
 
 	mx, my := s.getMousePosition()
-	fmt.Printf("QuickLookup: creating widget at %d,%d\n", mx+24, my-400)
+	// Position widget: right of cursor, centered vertically on cursor, clamped to screen top
+	wx := mx + 20
+	wy := my - 185
+	if wy < 20 {
+		wy = 20
+	}
+	fmt.Printf("QuickLookup: creating widget at %d,%d (mouse at %d,%d)\n", wx, wy, mx, my)
 
 	window := s.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:        "quicklookup",
 		Title:       "Quick Lookup",
 		Width:       400,
 		Height:      370,
-		X:           mx + 24,
-		Y:           my - 400,
+		X:           wx,
+		Y:           wy,
 		AlwaysOnTop: false,
 		Frameless:   true,
 		Hidden:      true,
@@ -217,12 +229,10 @@ func (s *QuickLookupService) registerGlobalHotkey() {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 func (s *QuickLookupService) getMousePosition() (int, int) {
-	// Use current window position as fallback (avoids CGEventCreate crash on ARM64)
 	type pos struct{ x, y int }
 	result := application.InvokeSyncWithResult[pos](func() pos {
-		// Default: position near top-right of screen (100, 100)
-		// The CGO mouse tracking has issues on ARM64 — use a sane default
-		return pos{x: 100, y: 100}
+		x, y := GetMouseLocation()
+		return pos{x: x, y: y}
 	})
 	return result.x, result.y
 }

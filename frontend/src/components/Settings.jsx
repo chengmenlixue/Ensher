@@ -89,12 +89,26 @@ function IconInfo() {
     </svg>
   );
 }
+function IconPalette() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="15.5" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
 
 const SECTIONS = [
   { id: 'features', label: '功能开关',  icon: <IconZap /> },
   { id: 'model',    label: '模型配置',  icon: <IconBot /> },
   { id: 'review',   label: '复习配置',  icon: <IconRepeat /> },
   { id: 'lookup',   label: 'Quick Lookup', icon: <IconSearch /> },
+  { id: 'skin',     label: '皮肤',     icon: <IconPalette /> },
   { id: 'data',     label: '导出',      icon: <IconDatabase /> },
   { id: 'about',    label: '说明',      icon: <IconInfo /> },
 ];
@@ -115,7 +129,6 @@ function Toggle({ value, onChange }) {
 
 // ── Section 1: Feature Toggles ─────────────────────────────────────────────
 function FeaturesPanel({ aiEnabled, setAiEnabled }) {
-  const { theme, setTheme } = useAI();
   return (
     <div className="space-y-1">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">应用全局开关</p>
@@ -130,16 +143,9 @@ function FeaturesPanel({ aiEnabled, setAiEnabled }) {
           <Toggle value={aiEnabled} onChange={setAiEnabled} />
         </div>
 
-        <div className="border-t border-gray-100" />
-
-        {/* 深色模式 */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-gray-700">深色模式</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">切换应用外观主题</p>
-          </div>
-          <Toggle value={theme === 'dark'} onChange={v => setTheme(v ? 'dark' : 'light')} />
-        </div>
+        <p className="text-[10px] text-gray-400 leading-relaxed">
+          配色方案和皮肤风格请在「皮肤」页面配置。
+        </p>
       </div>
     </div>
   );
@@ -325,7 +331,120 @@ function LookupPanel({ hotkey, setHotkey, hotkeyEnabled, setHotkeyEnabled }) {
   );
 }
 
-// ── Section 5: Data ────────────────────────────────────────────────────────
+// ── Section 5: Skin ────────────────────────────────────────────────────────
+const SKINS = [
+  {
+    id: 'neumorphic',
+    name: 'Neumorphic',
+    sub: '柔和拟物风格',
+    preview: {
+      bg: 'linear-gradient(135deg, #e8edf5, #cdd5e0)',
+      card: '#e8edf5',
+      accent: '#10b981',
+      shadow: '5px 5px 10px #a3b1c6, -5px -5px 10px #ffffff',
+      border: 'none',
+    },
+  },
+  {
+    id: 'newspaper',
+    name: 'Newspaper',
+    sub: '报纸艺术风格',
+    preview: {
+      bg: 'linear-gradient(135deg, #f5f0e6, #e8e0cc)',
+      card: '#faf5eb',
+      accent: '#8b2500',
+      shadow: '3px 3px 0 #c8c0a8',
+      border: '1px solid #d8d0b8',
+    },
+  },
+];
+
+function SkinPanel({ theme, setTheme, skin, setSkin }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">选择应用外观风格与主题</p>
+
+      {/* Theme: Light / Dark */}
+      <div className="neu-card p-5 mb-4">
+        <p className="text-sm font-semibold text-gray-700 mb-4">配色方案</p>
+        <div className="flex gap-3">
+          {[
+            { id: 'light', label: '浅色', icon: '☀' },
+            { id: 'dark',  label: '深色', icon: '☽' },
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTheme(t.id)}
+              className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all duration-200 ${
+                theme === t.id
+                  ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                  : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
+              }`}
+            >
+              <span className="text-2xl">{t.icon}</span>
+              <span className="text-xs font-semibold">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Skin selection */}
+      <div className="neu-card p-5">
+        <p className="text-sm font-semibold text-gray-700 mb-4">皮肤风格</p>
+        <div className="flex gap-4">
+          {SKINS.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setSkin(s.id)}
+              className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all duration-200 focus:outline-none ${
+                skin === s.id
+                  ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                  : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
+              }`}
+            >
+              {/* Mini preview */}
+              <div
+                className="w-14 h-10 rounded-lg"
+                style={{
+                  background: s.preview.card,
+                  boxShadow: s.preview.shadow,
+                  border: s.preview.border !== 'none' ? s.preview.border : undefined,
+                }}
+              >
+                <div
+                  className="w-6 h-1.5 rounded-full mx-auto mt-2"
+                  style={{ background: s.preview.accent }}
+                />
+              </div>
+              <span className="text-xs font-bold">{s.name}</span>
+              <span className="text-[10px] opacity-60">{s.sub}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Current combination preview */}
+      <div className="mt-4">
+        <p className="text-[10px] text-gray-400 mb-2 text-center">当前组合预览</p>
+        <div
+          className="neu-card mx-auto max-w-xs p-4 text-center"
+          style={{ maxWidth: 200 }}
+        >
+          <p className="text-base font-bold text-gray-700" style={{ fontFamily: skin === 'newspaper' ? 'Georgia, serif' : 'inherit' }}>
+            {skin === 'neumorphic' ? 'Neumorphic' : 'Newspaper Art'}
+          </p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{theme === 'light' ? '浅色' : '深色'}</p>
+          <div
+            className="w-full h-1 rounded-full mt-3"
+            style={{ background: skin === 'neumorphic' ? '#10b981' : '#8b2500' }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Section 6: Data ────────────────────────────────────────────────────────
 function DataPanel({ msg, setMsg, ioWorking, setIoWorking }) {
   return (
     <div className="space-y-1">
@@ -416,6 +535,7 @@ function AboutPanel() {
 
 // ── Main ───────────────────────────────────────────────────────────────────
 export default function Settings({ aiEnabled, setAiEnabled }) {
+  const { theme, setTheme, skin, setSkin } = useAI();
   const [section, setSection] = useState('features');
   const [provider, setProvider] = useState('minimax');
   const [providers, setProviders] = useState(DEFAULT_PROVIDERS_CONFIG());
@@ -519,6 +639,9 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
               hotkey={hotkey} setHotkey={setHotkey}
               hotkeyEnabled={hotkeyEnabled} setHotkeyEnabled={setHotkeyEnabled}
             />
+          )}
+          {section === 'skin' && (
+            <SkinPanel theme={theme} setTheme={setTheme} skin={skin} setSkin={setSkin} />
           )}
           {section === 'data' && (
             <DataPanel msg={msg} setMsg={setMsg} ioWorking={ioWorking} setIoWorking={setIoWorking} />

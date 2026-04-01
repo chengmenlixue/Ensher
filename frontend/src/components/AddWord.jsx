@@ -3,6 +3,8 @@ import * as WordService from "../../bindings/ensher/wordservice";
 import * as AIService from "../../bindings/ensher/aiservice";
 import { useAI } from '../App';
 
+const isChinese = (str) => /[\u4e00-\u9fff]/.test(str);
+
 export default function AddWord({ onAdded }) {
   const { aiEnabled, editWord, setEditWord } = useAI();
   const [form, setForm] = useState({ word: '', phonetic: '', definition: '', definitionZh: '', example: '', notes: '', tags: '' });
@@ -98,6 +100,7 @@ export default function AddWord({ onAdded }) {
             const result = await AIService.LookupWordWithAI(form.word.trim());
             setForm(prev => ({
               ...prev,
+              word: isChinese(prev.word) ? (result.word || prev.word) : prev.word,
               phonetic: result.phonetic || prev.phonetic,
               definition: result.definition || prev.definition,
               definitionZh: result.definitionZh || prev.definitionZh,
@@ -119,6 +122,7 @@ export default function AddWord({ onAdded }) {
       const result = await AIService.LookupWordWithAI(form.word.trim());
       setForm(prev => ({
         ...prev,
+        word: isChinese(prev.word) ? (result.word || prev.word) : prev.word,
         phonetic: result.phonetic || prev.phonetic,
         definition: result.definition || prev.definition,
         definitionZh: result.definitionZh || prev.definitionZh,

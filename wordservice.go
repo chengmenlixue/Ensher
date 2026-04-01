@@ -294,9 +294,9 @@ func (w *WordService) GetAllWords() ([]Word, error) {
 func (w *WordService) SearchWords(query string) ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
 		mastery_level, review_count, created_at, last_reviewed_at FROM words
-		WHERE word LIKE ? OR definition LIKE ? OR tags LIKE ?
+		WHERE word LIKE ? OR definition LIKE ? OR tags LIKE ? OR definition_zh LIKE ?
 		ORDER BY created_at DESC`,
-		"%"+query+"%", "%"+query+"%", "%"+query+"%",
+		"%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%",
 	)
 	if err != nil {
 		return nil, err

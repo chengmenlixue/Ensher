@@ -9,6 +9,14 @@ package main
 #import <Cocoa/Cocoa.h>
 #import <CoreGraphics/CoreGraphics.h>
 
+// getMouseLocation returns the current mouse position in top-left origin coordinates.
+void getMouseLocation(int* x, int* y) {
+    NSPoint loc = [NSEvent mouseLocation];
+    *x = (int)loc.x;
+    CGFloat screenHeight = [[NSScreen mainScreen] frame].size.height;
+    *y = (int)(screenHeight - loc.y);
+}
+
 // setWidgetHighLevel raises the widget window above fullscreen apps.
 void setWidgetHighLevel(void* nsWindow) {
     if (nsWindow == NULL) return;
@@ -41,6 +49,13 @@ void setWidgetLevelAsync(void* nsWindow) {
 */
 import "C"
 import "unsafe"
+
+// GetMouseLocation returns the current mouse position in screen coordinates (top-left origin).
+func GetMouseLocation() (int, int) {
+	var x, y C.int
+	C.getMouseLocation(&x, &y)
+	return int(x), int(y)
+}
 
 // SetWidgetWindowLevelGo calls the C setWidgetHighLevel.
 func SetWidgetWindowLevelGo(nsWindowPtr uintptr) {

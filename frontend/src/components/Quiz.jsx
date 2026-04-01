@@ -109,6 +109,7 @@ export default function Quiz() {
   const [userAnswer, setUserAnswer] = useState('');
   const [judging, setJudging]     = useState(false);
   const [judgment, setJudgment]   = useState(null);
+  const [inputLocked, setInputLocked] = useState(false); // lock textarea after judgment
 
   // ── Recall (spelling) mode ────────────────────────────────────────────────
   const [spellState, setSpellState] = useState(SPELL_NONE);
@@ -128,7 +129,7 @@ export default function Quiz() {
   const resetState = () => {
     setIdx(0); setDone(false); setResults([]);
     setShow(false); setKnown(null); setAnswered(false);
-    setUserAnswer(''); setJudgment(null);
+    setUserAnswer(''); setJudgment(null); setInputLocked(false);
     setSpellState(SPELL_NONE); setSpellInput('');
     setSpellCorrect(null);
   };
@@ -154,16 +155,20 @@ export default function Quiz() {
 
   // ── Global Enter key → Continue / Next ───────────────────────────────────
   useEffect(() => {
-    if (!((mode === 'recall' && spellState === SPELL_DONE) || (mode === 'judge' && show))) return;
+    if (!((mode === 'recall' && spellState === SPELL_DONE) ||
+          (mode === 'judge' && show && (!aiEnabled || judgment)))) return;
     const handler = (e) => {
-      if (e.key === 'Enter' && e.target.tagName !== 'INPUT') {
+      if (e.key === 'Enter' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
         e.preventDefault();
+        // In judge mode with AI enabled + judgment: Enter from non-input elements does nothing
+        // (the textarea onKeyDown handles Enter specifically)
+        if (mode === 'judge') return;
         handleContinueRef.current?.();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [mode, spellState, show]);
+  }, [mode, spellState, show, aiEnabled, judgment]);
 
   // ── Judge mode handlers ───────────────────────────────────────────────────
   const handleChoose = (k) => {
@@ -182,8 +187,10 @@ export default function Quiz() {
     try {
       const r = await AIService.JudgeAnswerWithAI(w.id, userAnswer.trim(), w.word);
       setJudgment(r);
+      setInputLocked(true);
     } catch(e) {
       setJudgment({ correct: null, judgment: '⚠ ' + e.toString(), advice: '' });
+      setInputLocked(true);
     }
     setJudging(false);
   };
@@ -201,8 +208,6 @@ export default function Quiz() {
     setSpellState(SPELL_NONE);
     setSpellInput('');
     setSpellCorrect(null);
-    setSpellAiResult(null);
-    spellInputRef.current?.focus();
   };
 
   // ── Continue ──────────────────────────────────────────────────────────────
@@ -212,7 +217,7 @@ export default function Quiz() {
     } else {
       setIdx(prev => prev + 1);
       setShow(false); setKnown(null); setAnswered(false);
-      setUserAnswer(''); setJudgment(null);
+      setUserAnswer(''); setJudgment(null); setInputLocked(false);
       setSpellState(SPELL_NONE); setSpellInput('');
       setSpellCorrect(null);
     }
@@ -239,14 +244,22 @@ export default function Quiz() {
   if (done) {
     const correct = results.filter(r => r.correct).length;
     const pct = results.length > 0 ? Math.round((correct / results.length) * 100) : 0;
-    const emoji = pct === 100 ? '🏆' : pct >= 80 ? '👍' : pct >= 60 ? '💪' : '📚';
     const msg = pct === 100 ? 'Perfect!' : pct >= 80 ? 'Excellent!' : pct >= 60 ? 'Good job!' : 'Keep going!';
+    const accentColor = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#6366f1';
     return (
       <div className="flex-1 flex items-center justify-center animate-fade-in">
         <div className="neu-card p-10 text-center">
-          <p className="text-7xl mb-4">{emoji}</p>
+          <div className="result-icon result-icon-large result-correct mx-auto mb-4">
+            <svg viewBox="0 0 56 56" fill="none">
+              <circle className="ring" cx="28" cy="28" r="24" stroke={accentColor} strokeWidth="2.5" fill={accentColor + '18'} />
+              <polyline className="check" points="16,30 24,38 40,20" stroke={accentColor} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <circle className="sparkle-1" cx="10" cy="14" r="2" fill={accentColor} />
+              <circle className="sparkle-2" cx="46" cy="12" r="1.5" fill={accentColor} opacity="0.6" />
+              <circle className="sparkle-3" cx="48" cy="40" r="1.8" fill={accentColor} opacity="0.4" />
+            </svg>
+          </div>
           <p className="text-4xl font-bold text-gray-800">{correct}/{results.length}</p>
-          <p className="text-sm text-gray-400 mt-2">{msg}</p>
+          <p className="text-sm mt-1" style={{ color: accentColor }}>{msg}</p>
           <button onClick={load} className="btn btn-primary mt-6">Try Again</button>
         </div>
       </div>
@@ -324,8 +337,16 @@ export default function Quiz() {
             {/* Result: correct */}
             {spellState === SPELL_DONE && spellCorrect === true && (
               <div className="space-y-3 animate-fade-in">
-                <div className="neu-pressed-sm p-4 text-center border-2 border-emerald-300 dark:border-emerald-500 rounded-2xl">
-                  <p className="text-4xl mb-2">✅</p>
+                <div className="neu-pressed-sm p-5 text-center border-2 border-emerald-300 dark:border-emerald-500 rounded-2xl">
+                  <div className="result-icon result-correct mx-auto mb-3">
+                    <svg viewBox="0 0 56 56" fill="none">
+                      <circle className="ring" cx="28" cy="28" r="24" stroke="#10b981" strokeWidth="2.5" fill="#10b98118" />
+                      <polyline className="check" points="16,30 24,38 40,20" stroke="#10b981" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      <circle className="sparkle-1" cx="10" cy="14" r="2" fill="#10b981" />
+                      <circle className="sparkle-2" cx="46" cy="12" r="1.5" fill="#10b981" opacity="0.6" />
+                      <circle className="sparkle-3" cx="48" cy="40" r="1.8" fill="#10b981" opacity="0.4" />
+                    </svg>
+                  </div>
                   <p className="text-base font-bold text-emerald-600">Correct!</p>
                   <p className="text-2xl font-bold word-display mt-1">{w.word}</p>
                   {w.phonetic && <p className="text-sm word-display-phonetic mt-0.5">{w.phonetic}</p>}
@@ -344,8 +365,14 @@ export default function Quiz() {
             {/* Result: incorrect */}
             {spellState === SPELL_DONE && spellCorrect === false && (
               <div className="space-y-3 animate-fade-in">
-                <div className="neu-pressed-sm p-4 text-center border-2 border-rose-300 dark:border-rose-500 rounded-2xl">
-                  <p className="text-4xl mb-2">❌</p>
+                <div className="neu-pressed-sm p-5 text-center border-2 border-rose-300 dark:border-rose-500 rounded-2xl">
+                  <div className="result-icon result-wrong mx-auto mb-3">
+                    <svg viewBox="0 0 56 56" fill="none">
+                      <circle cx="28" cy="28" r="24" stroke="#f43f5e" strokeWidth="2.5" fill="#f43f5e18" />
+                      <line className="cross-l" x1="20" y1="20" x2="36" y2="36" stroke="#f43f5e" strokeWidth="3" strokeLinecap="round" />
+                      <line className="cross-r" x1="36" y1="20" x2="20" y2="36" stroke="#f43f5e" strokeWidth="3" strokeLinecap="round" />
+                    </svg>
+                  </div>
                   <p className="text-sm font-bold text-rose-500 mb-2">Wrong!</p>
                   <p className="text-sm text-gray-400 line-through decoration-rose-400">{spellInput}</p>
                   <p className="text-2xl font-bold word-display mt-1">{w.word}</p>
@@ -452,7 +479,7 @@ export default function Quiz() {
               </div>
 
               {/* AI input when "I know it!" */}
-              {known === true && aiEnabled && !judgment && (
+              {known === true && aiEnabled && (
                 <div className="neu-pressed-sm p-4">
                   <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">用中文写出你的理解</p>
                   <textarea
@@ -460,9 +487,24 @@ export default function Quiz() {
                     style={{ paddingTop: '8px', paddingBottom: '8px' }}
                     rows={3}
                     value={userAnswer}
-                    onChange={e => setUserAnswer(e.target.value)}
+                    readOnly={inputLocked}
+                    onChange={e => !inputLocked && setUserAnswer(e.target.value)}
                     placeholder="请用中文解释这个词的意思..."
-                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), submitJudgment())}
+                    onKeyDown={e => {
+                      if (e.key !== 'Enter' || e.shiftKey) return;
+                      e.preventDefault();
+                      if (aiEnabled && judgment) {
+                        // After judgment: Enter → retry (wrong) or continue (correct)
+                        if (judgment.correct === false) {
+                          setJudgment(null); setUserAnswer(''); setInputLocked(false);
+                        } else {
+                          handleContinueRef.current?.();
+                        }
+                      } else if (aiEnabled && !judgment && userAnswer.trim()) {
+                        // Before judgment: Enter → trigger AI
+                        submitJudgment();
+                      }
+                    }}
                   />
                   <button onClick={submitJudgment} disabled={judging || !userAnswer.trim()}
                     className="btn btn-warning btn-sm mt-2 w-full">
@@ -477,7 +519,20 @@ export default function Quiz() {
                   {judgment.correct !== null ? (
                     <>
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">{judgment.correct === true ? '✅' : '❌'}</span>
+                        <span className="result-icon result-icon-sm">
+                          {judgment.correct === true ? (
+                            <svg viewBox="0 0 56 56" fill="none">
+                              <circle cx="28" cy="28" r="24" stroke="#10b981" strokeWidth="3" fill="#10b98118" />
+                              <polyline points="16,30 24,38 40,20" stroke="#10b981" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 56 56" fill="none">
+                              <circle cx="28" cy="28" r="24" stroke="#f43f5e" strokeWidth="3" fill="#f43f5e18" />
+                              <line x1="20" y1="20" x2="36" y2="36" stroke="#f43f5e" strokeWidth="3.5" strokeLinecap="round" />
+                              <line x1="36" y1="20" x2="20" y2="36" stroke="#f43f5e" strokeWidth="3.5" strokeLinecap="round" />
+                            </svg>
+                          )}
+                        </span>
                         <span className="text-sm font-bold text-gray-700">{judgment.correct === true ? '理解正确！' : '理解有误'}</span>
                       </div>
                       {judgment.judgment && <p className="text-sm text-gray-600 mb-2">💬 {judgment.judgment}</p>}
@@ -492,7 +547,7 @@ export default function Quiz() {
                       </div>
                     </div>
                   )}
-                  <button onClick={() => { setJudgment(null); setUserAnswer(''); }}
+                  <button onClick={() => { setJudgment(null); setUserAnswer(''); setInputLocked(false); }}
                     className="btn btn-soft btn-sm mt-3 w-full">再来一次</button>
                 </div>
               )}

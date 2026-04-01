@@ -9,7 +9,7 @@ import QuickLookupWidget from './components/QuickLookup';
 import * as AIService from "../bindings/ensher/aiservice";
 import * as WordService from "../bindings/ensher/wordservice";
 
-export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {}, editWord: null, setEditWord: () => {}, theme: 'light', setTheme: () => {} });
+export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {}, editWord: null, setEditWord: () => {}, theme: 'light', setTheme: () => {}, skin: 'neumorphic', setSkin: () => {} });
 
 const isWidget = new URLSearchParams(window.location.search).get('window') === 'widget';
 
@@ -29,12 +29,19 @@ export default function App() {
   const [wordsKey, setWordsKey] = useState(0);
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, word: null, wordCache: {} });
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const [skin, setSkin] = useState(() => localStorage.getItem('skin') || 'neumorphic');
 
   // Apply theme to root element and persist
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Apply skin to root element and persist
+  useEffect(() => {
+    document.documentElement.setAttribute('data-skin', skin);
+    localStorage.setItem('skin', skin);
+  }, [skin]);
 
   useEffect(() => {
     AIService.GetAISettings().then(s => {
@@ -102,7 +109,7 @@ export default function App() {
 
   if (isWidget) {
     return (
-      <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme }}>
+      <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme, skin, setSkin }}>
         <QuickLookupWidget />
       </AIContext.Provider>
     );
@@ -114,7 +121,7 @@ export default function App() {
   };
 
   return (
-    <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme }}>
+    <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme, skin, setSkin }}>
       <div className="flex h-screen app-bg">
         {/* Sidebar */}
         <nav className="w-52 neu-raised-sm m-3 mr-0 flex flex-col sidebar-drag overflow-hidden flex-shrink-0">

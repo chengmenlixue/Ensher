@@ -23,6 +23,7 @@ type AISettings struct {
 
 // AILookupResult holds enriched word data returned by the AI.
 type AILookupResult struct {
+	Word         string `json:"word"`
 	Phonetic     string `json:"phonetic"`
 	Definition   string `json:"definition"`
 	DefinitionZh string `json:"definitionZh"`
@@ -36,6 +37,43 @@ type AIDefineResult struct {
 	Correct    bool   `json:"correct"`    // AI's judgment
 	Judgment   string `json:"judgment"`    // AI's reasoning in Chinese
 	Advice     string `json:"advice"`      // Learning advice in Chinese
+}
+
+// isChineseText returns true if the string contains Chinese characters.
+func isChineseText(s string) bool {
+	for _, r := range s {
+		if (r >= 0x4e00 && r <= 0x9fff) || (r >= 0x3400 && r <= 0x4dbf) || (r >= 0xf900 && r <= 0xfaff) {
+			return true
+		}
+	}
+	return false
+}
+
+// buildLookupPrompt returns the appropriate AI prompt based on input language.
+func buildLookupPrompt(input string) string {
+	if isChineseText(input) {
+		return fmt.Sprintf(`你是一位专业的英语词汇专家。用户输入了中文词语或描述："%s"
+
+请找到最匹配的英文单词，返回纯JSON（不要任何markdown格式或额外说明），格式如下：
+{
+  "word": "最匹配的英文单词",
+  "phonetic": "IPA音标，如 /ɪmˈpekəbl/，如果没有则为空字符串",
+  "definition": "简洁准确的英文释义",
+  "definitionZh": "中文释义，请翻译准确、通俗易懂",
+  "example": "一个使用该单词的英文例句",
+  "notes": "词源、用法技巧或有趣的知识（中文或英文均可）",
+  "tags": "词性、CEFR等级等标签，用逗号分隔，如：adj,C1,academic"
+}`, input)
+	}
+	return fmt.Sprintf(`你是一位专业的英语词汇专家。请为单词 "%s" 返回纯JSON（不要任何markdown格式或额外说明），格式如下：
+{
+  "phonetic": "IPA音标，如 /ɪmˈpekəbl/，如果没有则为空字符串",
+  "definition": "简洁准确的英文释义",
+  "definitionZh": "中文释义，请翻译准确、通俗易懂",
+  "example": "一个使用该单词的英文例句",
+  "notes": "词源、用法技巧或有趣的知识（中文或英文均可）",
+  "tags": "词性、CEFR等级等标签，用逗号分隔，如：adj,C1,academic"
+}`, input)
 }
 
 // AIService is the Wails service exposing AI-related methods.
@@ -154,15 +192,7 @@ func LoadAISettings() (*AISettings, error) {
 // LookupWordWithAI (bilingual — Chinese + English)
 
 func lookupWithMiniMax(word, apiKey, modelName string) (*AILookupResult, error) {
-	prompt := fmt.Sprintf(`你是一位专业的英语词汇专家。请为单词 "%s" 返回纯JSON（不要任何markdown格式或额外说明），格式如下：
-{
-  "phonetic": "IPA音标，如 /ɪmˈpekəbl/，如果没有则为空字符串",
-  "definition": "简洁准确的英文释义",
-  "definitionZh": "中文释义，请翻译准确、通俗易懂",
-  "example": "一个使用该单词的英文例句",
-  "notes": "词源、用法技巧或有趣的知识（中文或英文均可）",
-  "tags": "词性、CEFR等级等标签，用逗号分隔，如：adj,C1,academic"
-}`, word)
+	prompt := buildLookupPrompt(word)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": modelName,
@@ -336,15 +366,7 @@ func judgeWithMiniMax(wordID int64, userAnswer, wordStr, apiKey, modelName strin
 }
 
 func lookupWithAtomGit(word, apiKey, modelName string) (*AILookupResult, error) {
-	prompt := fmt.Sprintf(`你是一位专业的英语词汇专家。请为单词 "%s" 返回纯JSON（不要任何markdown格式或额外说明），格式如下：
-{
-  "phonetic": "IPA音标，如 /ɪmˈpekəbl/，如果没有则为空字符串",
-  "definition": "简洁准确的英文释义",
-  "definitionZh": "中文释义，请翻译准确、通俗易懂",
-  "example": "一个使用该单词的英文例句",
-  "notes": "词源、用法技巧或有趣的知识（中文或英文均可）",
-  "tags": "词性、CEFR等级等标签，用逗号分隔，如：adj,C1,academic"
-}`, word)
+	prompt := buildLookupPrompt(word)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": modelName,
@@ -477,15 +499,7 @@ func judgeWithAtomGit(wordID int64, userAnswer, wordStr, apiKey, modelName strin
 }
 
 func lookupWithZhipu(word, apiKey, modelName string) (*AILookupResult, error) {
-	prompt := fmt.Sprintf(`你是一位专业的英语词汇专家。请为单词 "%s" 返回纯JSON（不要任何markdown格式或额外说明），格式如下：
-{
-  "phonetic": "IPA音标，如 /ɪmˈpekəbl/，如果没有则为空字符串",
-  "definition": "简洁准确的英文释义",
-  "definitionZh": "中文释义，请翻译准确、通俗易懂",
-  "example": "一个使用该单词的英文例句",
-  "notes": "词源、用法技巧或有趣的知识（中文或英文均可）",
-  "tags": "词性、CEFR等级等标签，用逗号分隔，如：adj,C1,academic"
-}`, word)
+	prompt := buildLookupPrompt(word)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": modelName,

@@ -27,6 +27,7 @@ export default function App() {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [editWord, setEditWord] = useState(null);
   const [wordsKey, setWordsKey] = useState(0);
+  const [reviewWords, setReviewWords] = useState(null);
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, word: null, wordCache: {} });
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [skin, setSkin] = useState(() => localStorage.getItem('skin') || 'neumorphic');
@@ -115,9 +116,11 @@ export default function App() {
     );
   }
 
-  const navigate = (id) => {
+  const navigate = (id, payload) => {
     setPage(id);
     if (id === 'words') setWordsKey(k => k + 1);
+    if (id === 'quiz' && payload) setReviewWords(payload);
+    if (id === 'quiz' && !payload) setReviewWords(null);
   };
 
   return (
@@ -170,10 +173,10 @@ export default function App() {
             <WordList onEditWord={(w) => { setEditWord(w); navigate('add'); }} />
           </div>
           <div style={{ display: page === 'quiz' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
-            <Quiz />
+            <Quiz reviewWords={reviewWords} />
           </div>
           <div style={{ display: page === 'daily-article' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
-            <DailyArticle showTooltip={showTooltip} hideTooltip={hideTooltip} aiEnabled={aiEnabled} />
+            <DailyArticle showTooltip={showTooltip} hideTooltip={hideTooltip} aiEnabled={aiEnabled} onReview={(words) => navigate('quiz', words)} />
           </div>
           <div style={{ display: page === 'settings' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
             <Settings aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} />

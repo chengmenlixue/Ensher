@@ -10,11 +10,35 @@ const MODES = [
 ];
 
 // ── Spelling input: underline-style text field ────────────────────────────────
-function SpellInput({ word, value, onChange, onSubmit }) {
+function SpellInput({ word, value, onChange, onSubmit, spellWrongCounts = [], onWrongAttempt }) {
   const inputRef = useRef(null);
+  const prevValueRef = useRef('');
+
+  // Sync ref when value changes externally (e.g. retry/reset)
+  useEffect(() => {
+    prevValueRef.current = value;
+  }, [value]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); onSubmit(); }
+  };
+
+  // Detect newly typed wrong letter
+  const handleChange = (e) => {
+    const newVal = e.target.value;
+    // Compare char by char to find the newly entered position
+    for (let i = 0; i < word.length; i++) {
+      const oldChar = prevValueRef.current[i] || '';
+      const newChar = newVal[i] || '';
+      if (newChar && newChar !== oldChar) {
+        const correctChar = word[i].toLowerCase();
+        if (newChar.toLowerCase() !== correctChar) {
+          onWrongAttempt?.(i);
+        }
+      }
+    }
+    prevValueRef.current = newVal;
+    onChange(e);
   };
 
   return (
@@ -28,6 +52,8 @@ function SpellInput({ word, value, onChange, onSubmit }) {
         {/* Underline + letter render */}
         <div className="flex items-end justify-center gap-3" style={{ minHeight: 40 }}>
           {word.split('').map((ch, i) => {
+            const wrongCount = spellWrongCounts[i] || 0;
+            const revealed = wrongCount >= 3;
             const typed = value[i] || '';
             const correct = typed && typed.toLowerCase() === ch.toLowerCase();
             return (
@@ -35,11 +61,11 @@ function SpellInput({ word, value, onChange, onSubmit }) {
                 {/* Letter or placeholder */}
                 <span
                   className={`text-2xl font-bold transition-all duration-150 ${
-                    correct ? 'spell-correct-text' : typed ? 'text-gray-700 dark:text-gray-200' : 'text-transparent'
+                    correct ? 'spell-correct-text' : revealed ? 'spell-correct-text' : typed ? 'text-gray-700 dark:text-gray-200' : 'text-transparent'
                   }`}
                   style={{ fontFamily: 'inherit', lineHeight: 1, height: 36, display: 'flex', alignItems: 'flex-end' }}
                 >
-                  {typed || ch}
+                  {revealed ? ch : (typed || ch)}
                 </span>
                 {/* Underline */}
                 <div
@@ -63,10 +89,9 @@ function SpellInput({ word, value, onChange, onSubmit }) {
         )}
       </div>
 
-      {/* Hidden real input */}
+      {/* Visible input (transparent, over letter slots) */}
       <input
         ref={inputRef}
-        className="sr-only"
         value={value}
         onChange={e => {
           const filtered = e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, word.length);
@@ -78,6 +103,8 @@ function SpellInput({ word, value, onChange, onSubmit }) {
         autoCorrect="off"
         spellCheck={false}
         aria-label="Spell the word"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
+        style={{ minHeight: 64 }}
       />
 
       {/* Hint */}
@@ -91,16 +118,18 @@ function SpellInput({ word, value, onChange, onSubmit }) {
 const SPELL_NONE = 0;
 const SPELL_DONE  = 1;
 
-export default function Quiz() {
+export default function Quiz({ reviewWords = null }) {
   const { aiEnabled } = useAI();
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [mode, setMode]           = useState('recall'); // 'judge' | 'recall'
   const [words, setWords]         = useState([]);
+  const [articleReviewWords, setArticleReviewWords] = useState(null); // persists across mode switches
   const [idx, setIdx]             = useState(0);
   const [done, setDone]           = useState(false);
   const [results, setResults]     = useState([]);
   const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // ── Judge mode ────────────────────────────────────────────────────────────
   const [show, setShow]           = useState(false);
@@ -115,7 +144,14 @@ export default function Quiz() {
   const [spellState, setSpellState] = useState(SPELL_NONE);
   const [spellInput, setSpellInput] = useState('');
   const [spellCorrect, setSpellCorrect] = useState(null);
+  const [spellWrongCounts, setSpellWrongCounts] = useState([]); // per-letter wrong attempt counts
   const handleContinueRef = useRef(null);
+
+  // Reset spellWrongCounts when word changes
+  const w = words[idx];
+  useEffect(() => {
+    if (w) setSpellWrongCounts(new Array(w.word.length).fill(0));
+  }, [w?.id]);
 
   // ── Daily limit (kept for hint display) ──────────────────────────────────
   const [dailyLimit, setDailyLimit] = useState(20);
@@ -136,21 +172,58 @@ export default function Quiz() {
 
   const load = async () => {
     setLoading(true);
-    resetState();
     try {
+      // Check if coming from DailyArticle with selected words (via props)
+      if (reviewWords && reviewWords.length > 0) {
+        const fetched = await Promise.all(
+          reviewWords.map(t => WordService.GetWordByName(t).catch(() => null))
+        );
+        const valid = fetched.filter(Boolean);
+        if (valid.length > 0) {
+          resetState();
+          setWords(valid);
+          setArticleReviewWords(valid);
+          setLoading(false);
+          return;
+        }
+      }
+      // Keep current words while switching modes from article context
+      if (articleReviewWords) {
+        resetState();
+        setWords(articleReviewWords);
+        setLoading(false);
+        return;
+      }
+      // Fallback: normal review queue
+      resetState();
       const w = await WordService.GetWordsForReview();
       setWords(w || []);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error(e); resetState(); }
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, [reviewWords]);
 
   // ── Mode switch: reload words ─────────────────────────────────────────────
   const switchMode = (m) => {
     if (m === mode) return;
     setMode(m);
     load();
+  };
+
+  // ── Refresh: re-fetch from normal queue ──────────────────────────────────
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setArticleReviewWords(null); // clear article context
+    resetState();
+    try {
+      const w = await WordService.GetWordsForReview();
+      setWords(w || []);
+    } catch(e) { console.error(e); }
+    setLoading(false);
+    setRefreshing(false);
   };
 
   // ── Global Enter key → Continue / Next ───────────────────────────────────
@@ -208,6 +281,7 @@ export default function Quiz() {
     setSpellState(SPELL_NONE);
     setSpellInput('');
     setSpellCorrect(null);
+    if (w) setSpellWrongCounts(new Array(w.word.length).fill(0));
   };
 
   // ── Continue ──────────────────────────────────────────────────────────────
@@ -266,8 +340,6 @@ export default function Quiz() {
     );
   }
 
-  const w = words[idx];  // ══════════════════════════════════════════════════════════════════════════
-  //  RECALL MODE (Spelling)
   // ══════════════════════════════════════════════════════════════════════════
   if (mode === 'recall') {
     return (
@@ -291,7 +363,17 @@ export default function Quiz() {
 
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-700">拼写练习</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-bold text-gray-700">拼写练习</h2>
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="text-gray-400 hover:text-emerald-500 transition-colors text-sm"
+                title="刷新复习词单"
+              >
+                <span className={refreshing ? 'animate-spin' : ''}>↻</span>
+              </button>
+            </div>
             <span className="badge badge-sky text-sky-700">{idx+1} / {words.length}</span>
           </div>
 
@@ -319,17 +401,27 @@ export default function Quiz() {
                   value={spellInput}
                   onChange={setSpellInput}
                   onSubmit={submitSpell}
-                  submitDisabled={!spellInput.trim() || spellInput.length < w.word.length}
+                  spellWrongCounts={spellWrongCounts}
+                  onWrongAttempt={idx => {
+                    setSpellWrongCounts(prev => {
+                      const next = [...prev];
+                      next[idx] = (next[idx] || 0) + 1;
+                      return next;
+                    });
+                  }}
                 />
                 <button
                   onClick={submitSpell}
-                  disabled={spellInput.length < w.word.length}
+                  disabled={
+                    spellInput.length === 0 &&
+                    spellWrongCounts.filter(c => c >= 3).length === 0
+                  }
                   className="btn btn-primary w-full py-3 text-base"
                 >
                   提交
                 </button>
                 <p className="text-center text-xs text-gray-400">
-                  输入全部字母后按 Enter 或点击提交
+                  输错 3 次自动显示正确字母
                 </p>
               </div>
             )}
@@ -445,7 +537,17 @@ export default function Quiz() {
 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-gray-700">Daily Review</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-bold text-gray-700">Daily Review</h2>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="text-gray-400 hover:text-emerald-500 transition-colors text-sm"
+              title="刷新复习词单"
+            >
+              <span className={refreshing ? 'animate-spin' : ''}>↻</span>
+            </button>
+          </div>
           <span className="badge badge-sky text-sky-700">{idx+1} / {words.length}</span>
         </div>
 

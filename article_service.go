@@ -150,19 +150,29 @@ func (s *ArticleService) migrate() error {
 
 // GenerateDailyArticle generates an article using randomly selected eligible words (max 40).
 func (s *ArticleService) GenerateDailyArticle() (*Article, error) {
+	return s.GenerateDailyArticleWithOptions(40, "")
+}
+
+// GenerateDailyArticleWithOptions generates an article with specified word count and topic.
+// wordCount: max words to include (10-100, 0 means default 40)
+// topic: article topic (empty = auto from AI, e.g. "Technology", "Science")
+func (s *ArticleService) GenerateDailyArticleWithOptions(wordCount int, topic string) (*Article, error) {
+	if wordCount <= 0 {
+		wordCount = 40
+	}
+	if wordCount > 100 {
+		wordCount = 100
+	}
+
 	// Query eligible words: today's new words + words due for spaced-repetition review.
-	// RANDOM() gives uniform random ordering; LIMIT 40 caps total.
-	rows, err := s.db.Query(`
+	rows, err := s.db.Query(fmt.Sprintf(`
 		SELECT id, word FROM words
 		WHERE
-			-- Today's new words (never reviewed)
 			(mastery_level = 0 AND DATE(created_at) = DATE('now'))
 			OR
-			-- Words due for review: reviewed before, mastery < 5
 			(mastery_level > 0 AND mastery_level < 5 AND last_reviewed_at IS NOT NULL AND last_reviewed_at != '')
 		ORDER BY RANDOM()
-		LIMIT 40
-	`)
+		LIMIT %d`, wordCount))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query eligible words: %w", err)
 	}
@@ -193,7 +203,7 @@ func (s *ArticleService) GenerateDailyArticle() (*Article, error) {
 	wordListStr := strings.Join(allWords, ", ")
 
 	// Call AI to generate article
-	result, err := generateArticleWithAI(wordListStr, len(allWords))
+	result, err := generateArticleWithAI(wordListStr, len(allWords), topic)
 	if err != nil {
 		return nil, fmt.Errorf("AI generation failed: %w", err)
 	}
@@ -202,16 +212,18 @@ func (s *ArticleService) GenerateDailyArticle() (*Article, error) {
 	wordIDsJSON, _ := json.Marshal(wordIDs)
 	wordTextsJSON, _ := json.Marshal(allWords)
 
-	// Insert into database
-	topic := "General"
-	if result.Topic != "" {
-		topic = result.Topic
+	// Determine final topic: user-provided > AI-suggested > "General"
+	articleTopic := "General"
+	if topic != "" {
+		articleTopic = topic
+	} else if result.Topic != "" {
+		articleTopic = result.Topic
 	}
 
 	res, err := s.db.Exec(`
 		INSERT INTO articles (title, content, content_zh, topic, word_ids, word_texts, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`,
-		result.Title, result.Content, result.ContentZh, topic,
+		result.Title, result.Content, result.ContentZh, articleTopic,
 		string(wordIDsJSON), string(wordTextsJSON))
 	if err != nil {
 		return nil, fmt.Errorf("failed to save article: %w", err)
@@ -223,7 +235,7 @@ func (s *ArticleService) GenerateDailyArticle() (*Article, error) {
 		Title:     result.Title,
 		Content:   result.Content,
 		ContentZh: result.ContentZh,
-		Topic:     topic,
+		Topic:     articleTopic,
 		WordIDs:   string(wordIDsJSON),
 		WordTexts: string(wordTextsJSON),
 		CreatedAt: time.Now().Format("2006-01-02 15:04:05"),
@@ -431,7 +443,7 @@ type articleAIResult struct {
 	Topic      string `json:"topic"`
 }
 
-func generateArticleWithAI(wordList string, wordCount int) (*articleAIResult, error) {
+func generateArticleWithAI(wordList string, wordCount int, topic string) (*articleAIResult, error) {
 	settings, err := LoadAISettings()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AI settings: %w", err)
@@ -442,17 +454,21 @@ func generateArticleWithAI(wordList string, wordCount int) (*articleAIResult, er
 	}
 	switch settings.Provider {
 	case "minimax":
-		return generateArticleWithMiniMax(wordList, wordCount, cfg.APIKey, cfg.ModelName)
+		return generateArticleWithMiniMax(wordList, wordCount, topic, cfg.APIKey, cfg.ModelName)
 	case "atomgit":
-		return generateArticleWithAtomGit(wordList, wordCount, cfg.APIKey, cfg.ModelName)
+		return generateArticleWithAtomGit(wordList, wordCount, topic, cfg.APIKey, cfg.ModelName)
 	case "zhipu":
-		return generateArticleWithZhipu(wordList, wordCount, cfg.APIKey, cfg.ModelName)
+		return generateArticleWithZhipu(wordList, wordCount, topic, cfg.APIKey, cfg.ModelName)
 	default:
 		return nil, fmt.Errorf("unsupported AI provider: %s", settings.Provider)
 	}
 }
 
-func generateArticleWithMiniMax(wordList string, wordCount int, apiKey, modelName string) (*articleAIResult, error) {
+func generateArticleWithMiniMax(wordList string, wordCount int, topic string, apiKey, modelName string) (*articleAIResult, error) {
+	topicInstruction := ""
+	if topic != "" {
+		topicInstruction = fmt.Sprintf("\n5. The article must be about: %s\n", topic)
+	}
 	prompt := fmt.Sprintf(`You are an expert English writing assistant. Your task is to write a creative, engaging English article.
 
 VOCABULARY WORDS TO INCORPORATE: %s
@@ -461,8 +477,7 @@ Requirements:
 1. Write a 400-500 word English article that naturally incorporates the vocabulary words above.
 2. The article should be interesting, well-structured (with a clear beginning, middle, and end).
 3. Use the vocabulary words in context naturally — do not force them awkwardly.
-4. At the end, provide a Chinese translation of the entire article.
-
+4. At the end, provide a Chinese translation of the entire article.%s
 Return ONLY valid JSON (no markdown, no code fences):
 {
   "title": "A creative, catchy article title in English (max 60 characters)",
@@ -470,7 +485,7 @@ Return ONLY valid JSON (no markdown, no code fences):
   "contentZh": "The complete Chinese translation of the article",
   "topic": "A single topic label from this list: General, Technology, Science, Daily Life, Travel, Food, Business, Nature, Health, Education, Entertainment, Culture, Sports, History"
 }
-`, wordList)
+`, wordList, topicInstruction)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": modelName,
@@ -529,7 +544,11 @@ Return ONLY valid JSON (no markdown, no code fences):
 	return &r, nil
 }
 
-func generateArticleWithAtomGit(wordList string, wordCount int, apiKey, modelName string) (*articleAIResult, error) {
+func generateArticleWithAtomGit(wordList string, wordCount int, topic string, apiKey, modelName string) (*articleAIResult, error) {
+	topicInstruction := ""
+	if topic != "" {
+		topicInstruction = fmt.Sprintf("\n5. The article must be about: %s\n", topic)
+	}
 	prompt := fmt.Sprintf(`You are an expert English writing assistant. Your task is to write a creative, engaging English article.
 
 VOCABULARY WORDS TO INCORPORATE: %s
@@ -538,8 +557,7 @@ Requirements:
 1. Write a 400-500 word English article that naturally incorporates the vocabulary words above.
 2. The article should be interesting, well-structured (with a clear beginning, middle, and end).
 3. Use the vocabulary words in context naturally — do not force them awkwardly.
-4. At the end, provide a Chinese translation of the entire article.
-
+4. At the end, provide a Chinese translation of the entire article.%s
 Return ONLY valid JSON (no markdown, no code fences):
 {
   "title": "A creative, catchy article title in English (max 60 characters)",
@@ -547,7 +565,7 @@ Return ONLY valid JSON (no markdown, no code fences):
   "contentZh": "The complete Chinese translation of the article",
   "topic": "A single topic label from this list: General, Technology, Science, Daily Life, Travel, Food, Business, Nature, Health, Education, Entertainment, Culture, Sports, History"
 }
-`, wordList)
+`, wordList, topicInstruction)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": modelName,
@@ -608,7 +626,11 @@ Return ONLY valid JSON (no markdown, no code fences):
 	return &r, nil
 }
 
-func generateArticleWithZhipu(wordList string, wordCount int, apiKey, modelName string) (*articleAIResult, error) {
+func generateArticleWithZhipu(wordList string, wordCount int, topic string, apiKey, modelName string) (*articleAIResult, error) {
+	topicInstruction := ""
+	if topic != "" {
+		topicInstruction = fmt.Sprintf("\n5. The article must be about: %s\n", topic)
+	}
 	prompt := fmt.Sprintf(`You are an expert English writing assistant. Your task is to write a creative, engaging English article.
 
 VOCABULARY WORDS TO INCORPORATE: %s
@@ -617,8 +639,7 @@ Requirements:
 1. Write a 400-500 word English article that naturally incorporates the vocabulary words above.
 2. The article should be interesting, well-structured (with a clear beginning, middle, and end).
 3. Use the vocabulary words in context naturally — do not force them awkwardly.
-4. At the end, provide a Chinese translation of the entire article.
-
+4. At the end, provide a Chinese translation of the entire article.%s
 Return ONLY valid JSON (no markdown, no code fences):
 {
   "title": "A creative, catchy article title in English (max 60 characters)",
@@ -626,7 +647,7 @@ Return ONLY valid JSON (no markdown, no code fences):
   "contentZh": "The complete Chinese translation of the article",
   "topic": "A single topic label from this list: General, Technology, Science, Daily Life, Travel, Food, Business, Nature, Health, Education, Entertainment, Culture, Sports, History"
 }
-`, wordList)
+`, wordList, topicInstruction)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"model": modelName,

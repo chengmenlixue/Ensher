@@ -15,6 +15,8 @@ export default function QuickLookupWidget() {
   const [searching, setSearching] = useState(false);
   const [searchPhase, setSearchPhase] = useState('');
   const inputRef = useRef(null);
+  const listRef = useRef(null);
+  const itemRefs = useRef([]);
   const { aiEnabled } = useAI();
 
   const cleanQuery = (raw) => raw.trim();
@@ -29,6 +31,14 @@ export default function QuickLookupWidget() {
       inputRef.current?.focus();
     }
   }, [searching, results.length, result]);
+
+  // Auto-scroll selected item into view
+  useEffect(() => {
+    const el = itemRefs.current[selectedIdx];
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [selectedIdx]);
 
   const handleClose = useCallback(() => {
     QuickLookup.HideWidget();
@@ -76,6 +86,7 @@ export default function QuickLookupWidget() {
             } else {
               setResults(dbResults);
               setSelectedIdx(0);
+              itemRefs.current = [];
             }
             return;
           }
@@ -229,6 +240,7 @@ export default function QuickLookupWidget() {
           {results.map((w, idx) => (
             <div
               key={w.id}
+              ref={el => { itemRefs.current[idx] = el; }}
               onClick={() => selectFromList(idx)}
               className={`px-3 py-2 rounded-lg cursor-pointer transition-colors ${
                 idx === selectedIdx ? 'ring-1' : ''

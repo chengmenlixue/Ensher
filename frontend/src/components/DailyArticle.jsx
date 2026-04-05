@@ -4,7 +4,7 @@ import * as ArticleService from "../../bindings/ensher/articleservice";
 const TOPICS = ['All', 'General', 'Technology', 'Science', 'Daily Life', 'Travel', 'Food', 'Business', 'Nature', 'Health', 'Education', 'Entertainment', 'Culture', 'Sports', 'History'];
 const PAGE_SIZE = 15;
 
-export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = true }) {
+export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = true, onReview }) {
   const [articles, setArticles] = useState([]);
   const [allDates, setAllDates] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -12,9 +12,13 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
   const [topicFilter, setTopicFilter] = useState('All');
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [showZh, setShowZh] = useState(true);
+  const [selectedWords, setSelectedWords] = useState([]); // selected word texts for review
   const [deleteId, setDeleteId] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generatingError, setGeneratingError] = useState('');
+  const [generatingModal, setGeneratingModal] = useState(false); // show generate options dialog
+  const [genWordCount, setGenWordCount] = useState(20);
+  const [genTopic, setGenTopic] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [total, setTotal] = useState(0);
@@ -29,6 +33,13 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
   useEffect(() => {
     loadInitialData();
   }, []);
+
+  // Reset selected words when entering article detail
+  useEffect(() => {
+    if (selectedArticle) {
+      setSelectedWords([]);
+    }
+  }, [selectedArticle?.id]);
 
   // Debounced search/filter change - reload from page 1
   useEffect(() => {
@@ -108,8 +119,9 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
     if (generating) return;
     setGenerating(true);
     setGeneratingError('');
+    setGeneratingModal(false);
     try {
-      const article = await ArticleService.GenerateDailyArticle();
+      const article = await ArticleService.GenerateDailyArticleWithOptions(genWordCount, genTopic);
       if (article) {
         // Prepend new article to list
         setArticles(prev => [article, ...prev]);
@@ -140,7 +152,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
     }
   };
 
-  // Highlight words in content
+  // Highlight + selectable words in content
   const renderHighlightedContent = (content, wordTexts) => {
     if (!wordTexts || !content) return content;
 
@@ -161,14 +173,21 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
 
     const parts = content.split(regex);
     return parts.map((part, i) => {
-      const isMatch = sorted.some(w => w.toLowerCase() === part.toLowerCase());
-      if (isMatch) {
+      const match = sorted.find(w => w.toLowerCase() === part.toLowerCase());
+      if (match) {
+        const isSelected = selectedWords.includes(match);
         return (
           <span
             key={i}
-            className="article-word-highlight"
+            className={`article-word-highlight ${isSelected ? 'article-word-selected' : ''}`}
+            onClick={() => {
+              setSelectedWords(prev =>
+                prev.includes(match) ? prev.filter(w => w !== match) : [...prev, match]
+              );
+            }}
             onMouseEnter={(e) => handleWordHover(e, part)}
             onMouseLeave={handleWordLeave}
+            title={isSelected ? '已选中，点击取消' : '点击选中'}
           >
             {part}
           </span>
@@ -220,6 +239,22 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
     acc[month].push(date);
     return acc;
   }, {});
+
+  const handleReview = () => {
+    if (selectedWords.length === 0) return;
+    if (onReview) onReview(selectedWords);
+  };
+
+  const handleSelectAll = () => {
+    const wordList = (() => {
+      try { return JSON.parse(selectedArticle.wordTexts || '[]'); } catch { return []; }
+    })();
+    if (selectedWords.length === wordList.length) {
+      setSelectedWords([]);
+    } else {
+      setSelectedWords([...wordList]);
+    }
+  };
 
   const monthLabel = (ym) => {
     const [y, m] = ym.split('-');
@@ -301,7 +336,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               </button>
             </div>
 
-            {/* Toggle bilingual */}
+            {/* Toggle bilingual + Review */}
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
               <button
                 onClick={() => setShowZh(!showZh)}
@@ -309,6 +344,23 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               >
                 {showZh ? '◉' : '○'} 中英对照
               </button>
+              {wordList.length > 0 && (
+                <>
+                  <button
+                    onClick={handleSelectAll}
+                    className="btn btn-sm btn-soft text-xs"
+                  >
+                    {selectedWords.length === wordList.length ? '取消全选' : '全选'}
+                  </button>
+                  <button
+                    onClick={handleReview}
+                    disabled={selectedWords.length === 0}
+                    className={`btn btn-sm text-xs flex items-center gap-1.5 ${selectedWords.length > 0 ? 'btn-primary' : 'btn-soft opacity-50 cursor-not-allowed'}`}
+                  >
+                    <span>↻</span> 复习 {selectedWords.length > 0 && `(${selectedWords.length})`}
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Content */}
@@ -400,6 +452,63 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
         </div>
       )}
 
+      {/* Generate options modal */}
+      {generatingModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <div className="neu-card p-6 w-80 space-y-4">
+            <h3 className="text-base font-bold text-gray-700">生成选项</h3>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">单词数量</p>
+              <div className="flex gap-2 flex-wrap">
+                {[10, 20, 30, 40].map(n => (
+                  <button
+                    key={n}
+                    onClick={() => setGenWordCount(n)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${genWordCount === n ? 'bg-emerald-500 text-white' : 'neu-pressed-sm text-gray-600 hover:bg-gray-100'}`}
+                  >
+                    {n} 词
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">文章主题</p>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { value: '', label: '随机' },
+                  { value: 'Technology', label: 'Technology' },
+                  { value: 'Science', label: 'Science' },
+                  { value: 'Daily Life', label: 'Daily Life' },
+                  { value: 'Business', label: 'Business' },
+                  { value: 'Health', label: 'Health' },
+                  { value: 'Education', label: 'Education' },
+                  { value: 'Travel', label: 'Travel' },
+                  { value: 'Nature', label: 'Nature' },
+                ].map(t => (
+                  <button
+                    key={t.value}
+                    onClick={() => setGenTopic(t.value)}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors ${genTopic === t.value ? 'bg-emerald-500 text-white' : 'neu-pressed-sm text-gray-600 hover:bg-gray-100'}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setGeneratingModal(false)} className="btn btn-soft flex-1 py-2 text-sm">取消</button>
+              <button
+                onClick={handleGenerate}
+                disabled={generating || !aiEnabled}
+                className={`btn btn-primary flex-1 py-2 text-sm ${!aiEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {generating ? '⟳ 生成中...' : '✨ 开始生成'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-6 pt-6 pb-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
@@ -410,7 +519,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
             </p>
           </div>
           <button
-            onClick={handleGenerate}
+            onClick={() => setGeneratingModal(true)}
             disabled={generating || !aiEnabled}
             className={`btn btn-primary btn-sm flex items-center gap-2 ${generating || !aiEnabled ? 'opacity-70' : ''}`}
             title={!aiEnabled ? 'AI 功能已关闭，请在设置中开启' : ''}

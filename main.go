@@ -2,7 +2,12 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"syscall"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -12,7 +17,32 @@ var assets embed.FS
 
 var app *application.App
 
+// acquireSingleInstanceLock tries to acquire an exclusive file lock.
+// Returns the lock file handle on success, or nil if another instance is running.
+func acquireSingleInstanceLock() *os.File {
+	dir := filepath.Join(os.Getenv("HOME"), ".ensher")
+	os.MkdirAll(dir, 0755)
+	lockPath := filepath.Join(dir, "ensher.lock")
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil
+	}
+	err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+	if err != nil {
+		f.Close()
+		return nil
+	}
+	return f
+}
+
 func main() {
+	lockFile := acquireSingleInstanceLock()
+	if lockFile == nil {
+		fmt.Println("Another ensher instance is already running, activating it...")
+		exec.Command("osascript", "-e", `tell application "ensher" to activate`).Run()
+		os.Exit(0)
+	}
+	defer lockFile.Close()
 	wordService := NewWordService()
 	aiService := &AIService{}
 	quickLookupService := NewQuickLookupService()

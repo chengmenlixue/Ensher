@@ -321,7 +321,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
             {/* Header */}
             <div className="flex items-start justify-between mb-6">
               <div className="flex-1">
-                <h1 className="text-2xl font-bold text-gray-800 leading-tight">{selectedArticle.title}</h1>
+                <h1 className="text-2xl font-bold text-gray-800 leading-tight article-title">{selectedArticle.title}</h1>
                 <p className="text-xs text-gray-400 mt-1">{articleDateLabel(selectedArticle.createdAt)}</p>
               </div>
               <span className={`badge ${topicBadgeClass(selectedArticle.topic)} ml-4 flex-shrink-0`}>
@@ -645,7 +645,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                   className="neu-card-sm p-5 cursor-pointer card-hover"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-sm font-bold text-gray-800 leading-tight flex-1 pr-3">
+                    <h3 className="text-sm font-bold text-gray-800 leading-tight flex-1 pr-3 article-title">
                       {article.title || 'Untitled'}
                     </h3>
                     <span className={`badge ${topicBadgeClass(article.topic)} flex-shrink-0`}>

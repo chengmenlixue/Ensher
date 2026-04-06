@@ -12,27 +12,133 @@ const SORTS = [
   { id: 'alpha',      label: '字母排序' },
 ];
 
-const RETAIN_COLORS = ['#f87171','#fb923c','#fbbf24','#a3e635','#34d399','#eab308'];
+const RETAIN_COLORS = ['var(--retain-1)','var(--retain-2)','var(--retain-3)','var(--retain-4)','var(--retain-5)','var(--retain-6)'];
 
-// ─── Retention bar ───────────────────────────────────────────────────────
-function RetentionBar({ mastery, lastReviewedAt }) {
-  let urgency = Math.min(5, Math.max(0, mastery));
+// ─── 2D Ebbinghaus retention curve ──────────────────────────────────────
+function EbbinghausCurve({ mastery, lastReviewedAt, compact }) {
+  // Urgency: mastery adjusted by days since last review
+  let urgency = Math.min(5, Math.max(0, mastery ?? 0));
+  let daysSinceReview = 0;
   if (lastReviewedAt) {
-    const days = (Date.now() - new Date(lastReviewedAt.replace(' ', 'T')).getTime()) / 86400000;
-    if (days > 7) urgency = Math.max(0, urgency - 2);
-    else if (days > 3) urgency = Math.max(0, urgency - 1);
+    daysSinceReview = (Date.now() - new Date(lastReviewedAt.replace(' ', 'T')).getTime()) / 86400000;
+    if (daysSinceReview > 7) urgency = Math.max(0, urgency - 2);
+    else if (daysSinceReview > 3) urgency = Math.max(0, urgency - 1);
   }
   urgency = Math.max(0, Math.min(4, urgency));
-  const fillColor = RETAIN_COLORS[urgency];
-  const fillPct = ((urgency + 1) / 5) * 100;
+
+  // Map urgency to Y position (0=bottom=urgent/red, 4=top=retentioned/green)
+  const urgencyT = urgency / 4; // 0 to 1
+  // Map days to X position (0=left=recent, 10=right=old)
+  const daysT = Math.min(1, daysSinceReview / 10);
+
+  // Dot color based on urgency
+  const dotColor = RETAIN_COLORS[urgency];
+
+  if (compact) {
+    // Compact: 52×22 SVG — simplified curve with colored dot
+    return (
+      <svg width={52} height={22} viewBox="0 0 52 22" className="flex-shrink-0" style={{ display: 'block' }}>
+        {/* Track area */}
+        <rect x={2} y={9} width={48} height={4} rx={2} fill="var(--neu-bg-dark)" opacity={0.6} />
+        {/* Ebbinghaus decay curve */}
+        <path
+          d={`M 2,11 C 10,11 16,5 26,5 C 34,5 40,11 50,11`}
+          fill="none"
+          stroke={dotColor}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          opacity={0.35}
+        />
+        {/* Dot — positioned along the curve based on urgency */}
+        <circle
+          cx={4 + daysT * 44}
+          cy={11 - urgencyT * 6}
+          r={3.5}
+          fill={dotColor}
+          style={{ filter: `drop-shadow(0 0 4px ${dotColor})` }}
+        />
+        {/* Pulse ring */}
+        <circle
+          cx={4 + daysT * 44}
+          cy={11 - urgencyT * 6}
+          r={5.5}
+          fill="none"
+          stroke={dotColor}
+          strokeWidth={0.8}
+          opacity={0.4}
+        />
+      </svg>
+    );
+  }
+
+  // Expanded: full 80×36 SVG with axis lines and labels
   return (
-    <div className="flex-shrink-0 w-16 h-1.5 rounded-full"
-      style={{ background: 'var(--neu-bg-dark)', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)' }}>
-      <div className="h-full rounded-full" style={{
-        width: `${fillPct}%`, background: fillColor,
-        transition: 'width 0.5s ease, background 0.3s ease',
-      }} />
-    </div>
+    <svg width={80} height={36} viewBox="0 0 80 36" className="flex-shrink-0" style={{ display: 'block' }}>
+      {/* Background subtle grid */}
+      <line x1={12} y1={30} x2={76} y2={30} stroke="var(--neu-shadow-dark)" strokeWidth={0.5} opacity={0.5} />
+      <line x1={12} y1={6} x2={12} y2={30} stroke="var(--neu-shadow-dark)" strokeWidth={0.5} opacity={0.5} />
+
+      {/* X axis label */}
+      <text x={44} y={35} textAnchor="middle" fontSize={5} fill="var(--text-secondary)" opacity={0.5}>time →</text>
+      {/* Y axis label */}
+      <text x={4} y={20} textAnchor="middle" fontSize={5} fill="var(--text-secondary)" opacity={0.5} transform="rotate(-90 4 20)">R</text>
+
+      {/* Ebbinghaus decay curve — full */}
+      <path
+        d={`M 12,6 C 28,6 38,22 76,30`}
+        fill="none"
+        stroke={dotColor}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        opacity={0.4}
+      />
+      {/* Secondary reference curves (fainter) */}
+      <path
+        d={`M 12,6 C 24,6 32,18 76,26`}
+        fill="none"
+        stroke={dotColor}
+        strokeWidth={1}
+        strokeLinecap="round"
+        opacity={0.2}
+        strokeDasharray="2 2"
+      />
+      <path
+        d={`M 12,6 C 32,6 42,24 76,32`}
+        fill="none"
+        stroke={dotColor}
+        strokeWidth={1}
+        strokeLinecap="round"
+        opacity={0.15}
+        strokeDasharray="2 2"
+      />
+
+      {/* Current position dot */}
+      <circle
+        cx={12 + daysT * 60}
+        cy={6 + (1 - urgencyT) * 24}
+        r={5}
+        fill={dotColor}
+        style={{ filter: `drop-shadow(0 0 6px ${dotColor})` }}
+      />
+      {/* Inner highlight */}
+      <circle
+        cx={12 + daysT * 60}
+        cy={6 + (1 - urgencyT) * 24}
+        r={2}
+        fill="white"
+        opacity={0.5}
+      />
+      {/* Pulse ring */}
+      <circle
+        cx={12 + daysT * 60}
+        cy={6 + (1 - urgencyT) * 24}
+        r={8}
+        fill="none"
+        stroke={dotColor}
+        strokeWidth={0.8}
+        opacity={0.35}
+      />
+    </svg>
   );
 }
 
@@ -42,12 +148,11 @@ function Card({ w, onDelete, onEdit, showRetention }) {
   return (
     <div className="neu-card-sm card-hover cursor-pointer" onClick={() => setOpen(v => !v)}>
       <div className="flex items-center gap-3 px-4 py-3">
-        {showRetention && <RetentionBar mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} />}
+        {showRetention && <EbbinghausCurve mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} compact />}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-bold word-display">{w.word}</span>
             {w.phonetic && <span className="text-xs word-display-phonetic">{w.phonetic}</span>}
-            <span className={`badge ${MB[w.masteryLevel]} ${MC[w.masteryLevel]}`}>{MASTERY[w.masteryLevel]}</span>
           </div>
           {w.definition && (
             <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">
@@ -57,12 +162,25 @@ function Card({ w, onDelete, onEdit, showRetention }) {
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <span className="text-xs text-gray-300 font-medium">{w.reviewCount}×</span>
+          <span className={`badge ${MB[w.masteryLevel]} ${MC[w.masteryLevel]}`} style={{ fontSize: '10px', padding: '1px 6px' }}>{MASTERY[w.masteryLevel]}</span>
           <span className={`text-xs transition-all duration-200 ${open ? 'rotate-90 text-emerald-500' : 'text-gray-300'}`}
             style={{ display: 'inline-block', width: 12, textAlign: 'center' }}>›</span>
         </div>
       </div>
       {open && (
-        <div className="px-4 pb-4 pt-1 border-t border-gray-200/50">
+        <div className="px-4 pb-4 pt-2 border-t border-gray-200/50">
+          {/* Expanded urgency + mastery indicators */}
+          <div className="flex items-center gap-3 mb-3 py-2 px-3 rounded-lg" style={{ background: 'var(--neu-bg-dark)', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)' }}>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Urgency</span>
+              <EbbinghausCurve mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} compact={false} />
+            </div>
+            <div className="w-px h-4 bg-gray-300/30" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Level</span>
+              <span className={`badge ${MB[w.masteryLevel]} ${MC[w.masteryLevel]}`} style={{ fontSize: '10px', padding: '1px 6px' }}>{MASTERY[w.masteryLevel]}</span>
+            </div>
+          </div>
           {w.definition && <div className="mb-3"><p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition (EN)</p><p className="text-sm text-gray-700 leading-relaxed">{w.definition}</p></div>}
           {w.definitionZh && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">中文释义</p><p className="text-sm text-gray-500 leading-relaxed">{w.definitionZh}</p></div>}
           {w.example && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Example</p><p className="text-sm text-gray-500 italic leading-relaxed">{w.example}</p></div>}
@@ -279,7 +397,7 @@ export default function WordList({ onEditWord }) {
     [isDate, dateFilter, words]
   );
 
-  const STICKY_BG = '#e8edf5';
+  const STICKY_BG = 'var(--neu-bg)';
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -356,22 +474,28 @@ export default function WordList({ onEditWord }) {
                   : (masteryGroups[tab.id]?.length ?? 0);
                 const levelIdx = tab.id === 'all' ? null : parseInt(tab.id, 10);
                 const barColor = levelIdx !== null ? RETAIN_COLORS[Math.min(levelIdx, 5)] : null;
+                const isActive = masteryFilter === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setMasteryFilter(tab.id)}
                     className={`relative flex-1 text-center py-2 rounded-lg text-xs font-semibold z-10 transition-colors duration-150 whitespace-nowrap ${
-                      masteryFilter === tab.id ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'
+                      isActive ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     <span>{tab.label}</span>
-                    <span className={`block text-[10px] mt-0.5 font-normal ${masteryFilter === tab.id ? 'text-emerald-500' : 'text-gray-400'}`}>
+                    <span className={`block text-[10px] mt-0.5 font-normal ${isActive ? 'text-emerald-500' : 'text-gray-400'}`}>
                       {count}
                     </span>
-                    {barColor && (
+                    {tab.id === 'all' && isActive ? (
                       <div
                         className="absolute bottom-1 left-4 right-4 h-1 rounded-full"
-                        style={{ background: barColor, opacity: masteryFilter === tab.id ? 0.85 : 0.3 }}
+                        style={{ background: 'linear-gradient(to right, var(--retain-1), var(--retain-3), var(--retain-5))' }}
+                      />
+                    ) : barColor && (
+                      <div
+                        className="absolute bottom-1 left-4 right-4 h-1 rounded-full"
+                        style={{ background: barColor, opacity: isActive ? 1 : 0.3 }}
                       />
                     )}
                   </button>

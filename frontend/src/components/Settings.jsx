@@ -336,9 +336,9 @@ const SKINS = [
   {
     id: 'neumorphic',
     name: 'Neumorphic',
-    sub: '柔和拟物风格',
+    sub: '柔和拟物',
     preview: {
-      bg: 'linear-gradient(135deg, #e8edf5, #cdd5e0)',
+      bg: 'linear-gradient(145deg, #e8edf5, #cdd5e0)',
       card: '#e8edf5',
       accent: '#10b981',
       shadow: '5px 5px 10px #a3b1c6, -5px -5px 10px #ffffff',
@@ -348,96 +348,197 @@ const SKINS = [
   {
     id: 'newspaper',
     name: 'Newspaper',
-    sub: '报纸艺术风格',
+    sub: '报纸艺术',
     preview: {
-      bg: 'linear-gradient(135deg, #f5f0e6, #e8e0cc)',
+      bg: 'linear-gradient(145deg, #f5f0e6, #e8e0cc)',
       card: '#faf5eb',
       accent: '#8b2500',
       shadow: '3px 3px 0 #c8c0a8',
       border: '1px solid #d8d0b8',
     },
   },
+  {
+    id: 'glass',
+    name: 'Glass',
+    sub: '晶透磨砂',
+    preview: {
+      bg: 'linear-gradient(145deg, #a8c0ff, #c4b5fd, #e8d5f5, #fce4ec, #c9d6ff)',
+      card: 'rgba(255,255,255,0.48)',
+      accent: '#6366f1',
+      shadow: '0 8px 32px rgba(99,102,241,0.09), 0 2px 4px rgba(0,0,0,0.03)',
+      border: '1px solid rgba(255,255,255,0.6)',
+    },
+  },
 ];
-
 function SkinPanel({ theme, setTheme, skin, setSkin }) {
+  const cur = SKINS.find(s => s.id === skin);
   return (
-    <div className="space-y-1">
+    <div className="space-y-5">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">选择应用外观风格与主题</p>
 
-      {/* Theme: Light / Dark */}
-      <div className="neu-card p-5 mb-4">
-        <p className="text-sm font-semibold text-gray-700 mb-4">配色方案</p>
+      {/* ── Skin selection — top ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <p className="text-sm font-semibold text-gray-700">皮肤风格</p>
+          <span className="text-[10px] text-gray-400">· 选择整体视觉风格</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {SKINS.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setSkin(s.id)}
+              className={`group relative flex flex-col items-center rounded-2xl border-2 p-4 transition-all duration-300 focus:outline-none overflow-hidden ${
+                skin === s.id
+                  ? 'border-emerald-400 shadow-lg shadow-emerald-100'
+                  : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+              }`}
+              style={skin === s.id ? { background: s.preview.card, boxShadow: s.preview.shadow } : { background: s.preview.card }}
+            >
+              {/* Preview swatch */}
+              <div
+                className="w-full h-16 rounded-xl mb-3 relative overflow-hidden"
+                style={{
+                  background: s.preview.bg,
+                  border: s.preview.border !== 'none' ? s.preview.border : undefined,
+                }}
+              >
+                <div
+                  className="absolute top-2 left-2 right-2 h-7 rounded-lg"
+                  style={{
+                    background: s.preview.card,
+                    boxShadow: s.preview.shadow,
+                    border: s.preview.border !== 'none' ? s.preview.border : undefined,
+                  }}
+                >
+                  <div className="flex items-center gap-1 px-2 pt-1.5">
+                    <div className="w-3 h-1 rounded-full" style={{ background: s.preview.accent }} />
+                    <div className="w-6 h-1 rounded-full" style={{ background: s.preview.accent, opacity: 0.35 }} />
+                  </div>
+                </div>
+                <div
+                  className="absolute bottom-2 left-3 right-3 h-1 rounded-full"
+                  style={{ background: s.preview.accent, opacity: 0.3 }}
+                />
+              </div>
+
+              <span className={`text-xs font-bold transition-colors ${skin === s.id ? 'text-emerald-700' : 'text-gray-600'}`}>
+                {s.name}
+              </span>
+              <span className="text-[10px] text-gray-400 mt-0.5">{s.sub}</span>
+
+              {skin === s.id && (
+                <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-400 flex items-center justify-center shadow-sm">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Theme toggle — below ── */}
+      <div className="neu-card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <p className="text-sm font-semibold text-gray-700">配色方案</p>
+          <span className="text-[10px] text-gray-400">· 浅色或深色</span>
+        </div>
         <div className="flex gap-3">
           {[
-            { id: 'light', label: '浅色', icon: '☀' },
-            { id: 'dark',  label: '深色', icon: '☽' },
+            {
+              id: 'light', label: '浅色', desc: '明亮清新',
+              gradient: 'linear-gradient(135deg, #e8edf5, #cdd5e0)',
+              icon: (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+              ),
+            },
+            {
+              id: 'dark', label: '深色', desc: '柔和护眼',
+              gradient: 'linear-gradient(135deg, #1e1e2e, #2a2a3c)',
+              icon: (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              ),
+            },
           ].map(t => (
             <button
               key={t.id}
               onClick={() => setTheme(t.id)}
-              className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all duration-200 ${
+              className={`flex-1 flex items-center gap-3 py-3.5 px-4 rounded-xl border-2 transition-all duration-300 ${
                 theme === t.id
                   ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
                   : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
               }`}
             >
-              <span className="text-2xl">{t.icon}</span>
-              <span className="text-xs font-semibold">{t.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Skin selection */}
-      <div className="neu-card p-5">
-        <p className="text-sm font-semibold text-gray-700 mb-4">皮肤风格</p>
-        <div className="flex gap-4">
-          {SKINS.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setSkin(s.id)}
-              className={`flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl border-2 transition-all duration-200 focus:outline-none ${
-                skin === s.id
-                  ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                  : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
-              }`}
-            >
-              {/* Mini preview */}
               <div
-                className="w-14 h-10 rounded-lg"
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border"
                 style={{
-                  background: s.preview.card,
-                  boxShadow: s.preview.shadow,
-                  border: s.preview.border !== 'none' ? s.preview.border : undefined,
+                  background: t.gradient,
+                  borderColor: theme === t.id ? 'rgba(16,185,129,0.3)' : 'rgba(0,0,0,0.08)',
+                  color: t.id === 'dark' ? '#fbbf24' : '#f59e0b',
                 }}
               >
-                <div
-                  className="w-6 h-1.5 rounded-full mx-auto mt-2"
-                  style={{ background: s.preview.accent }}
-                />
+                {t.icon}
               </div>
-              <span className="text-xs font-bold">{s.name}</span>
-              <span className="text-[10px] opacity-60">{s.sub}</span>
+              <div className="text-left">
+                <p className={`text-xs font-bold ${theme === t.id ? 'text-emerald-700' : 'text-gray-500'}`}>{t.label}</p>
+                <p className="text-[10px] text-gray-400">{t.desc}</p>
+              </div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Current combination preview */}
-      <div className="mt-4">
-        <p className="text-[10px] text-gray-400 mb-2 text-center">当前组合预览</p>
+      {/* ── Live preview ── */}
+      <div className="neu-card overflow-hidden">
+        <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+          <p className="text-xs font-semibold text-gray-500">实时预览</p>
+          <span className="text-[10px] text-gray-400">{cur?.name} · {theme === 'light' ? '浅色' : '深色'}</span>
+        </div>
         <div
-          className="neu-card mx-auto max-w-xs p-4 text-center"
-          style={{ maxWidth: 200 }}
+          className="mx-4 mb-4 rounded-xl p-4 relative overflow-hidden"
+          style={{
+            background: cur?.preview.bg,
+            border: cur?.preview.border !== 'none' ? cur?.preview.border : undefined,
+          }}
         >
-          <p className="text-base font-bold text-gray-700" style={{ fontFamily: skin === 'newspaper' ? 'Georgia, serif' : 'inherit' }}>
-            {skin === 'neumorphic' ? 'Neumorphic' : 'Newspaper Art'}
-          </p>
-          <p className="text-[10px] text-gray-400 mt-0.5">{theme === 'light' ? '浅色' : '深色'}</p>
           <div
-            className="w-full h-1 rounded-full mt-3"
-            style={{ background: skin === 'neumorphic' ? '#10b981' : '#8b2500' }}
-          />
+            className="rounded-xl p-3.5"
+            style={{
+              background: cur?.preview.card,
+              boxShadow: cur?.preview.shadow,
+              border: cur?.preview.border !== 'none' ? cur?.preview.border : undefined,
+            }}
+          >
+            <p className="text-sm font-bold text-gray-700 mb-1" style={{ fontFamily: skin === 'newspaper' ? 'Georgia, serif' : 'inherit' }}>
+              Ensher
+            </p>
+            <p className="text-[10px] text-gray-400 mb-2.5">每日一词 · 积少成多</p>
+            <div className="flex gap-1.5">
+              <div className="h-5 px-2.5 rounded-md flex items-center" style={{ background: cur?.preview.accent, opacity: 0.9 }}>
+                <span className="text-[9px] font-bold text-white">Review</span>
+              </div>
+              <div className="h-5 px-2.5 rounded-md bg-gray-200/60 flex items-center">
+                <span className="text-[9px] font-semibold text-gray-500">Dashboard</span>
+              </div>
+            </div>
+            <div
+              className="w-full h-1 rounded-full mt-3"
+              style={{ background: cur?.preview.accent, opacity: 0.35 }}
+            />
+          </div>
         </div>
       </div>
     </div>

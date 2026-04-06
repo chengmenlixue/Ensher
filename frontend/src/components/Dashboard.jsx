@@ -19,14 +19,14 @@ export default function Dashboard({ onNav }) {
   }, []);
 
   if (loadError) return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ background: '#e8edf5' }}>
+    <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ background: 'var(--neu-bg)' }}>
       <p style={{ fontSize: 32 }}>⚠️</p>
       <p style={{ color: '#6b7280', fontSize: 14 }}>Failed to load stats. Please restart the app.</p>
     </div>
   );
 
   if (!stats) return (
-    <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse" style={{ background: '#e8edf5' }}>
+    <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse" style={{ background: 'var(--neu-bg)' }}>
       Loading...
     </div>
   );

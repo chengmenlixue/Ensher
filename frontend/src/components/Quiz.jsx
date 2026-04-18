@@ -23,13 +23,13 @@ function SpellInput({ word, value, onChange, onSubmit, spellWrongCounts = [], on
     if (e.key === 'Enter') { e.preventDefault(); onSubmit(); }
   };
 
-  // Detect newly typed wrong letter
+  // Detect wrong letter and filter input
   const handleChange = (e) => {
-    const newVal = e.target.value;
-    // Compare char by char to find the newly entered position
+    const filtered = e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, word.length);
+    // Compare char by char to find the newly entered wrong position
     for (let i = 0; i < word.length; i++) {
       const oldChar = prevValueRef.current[i] || '';
-      const newChar = newVal[i] || '';
+      const newChar = filtered[i] || '';
       if (newChar && newChar !== oldChar) {
         const correctChar = word[i].toLowerCase();
         if (newChar.toLowerCase() !== correctChar) {
@@ -37,8 +37,8 @@ function SpellInput({ word, value, onChange, onSubmit, spellWrongCounts = [], on
         }
       }
     }
-    prevValueRef.current = newVal;
-    onChange(e);
+    prevValueRef.current = filtered;
+    onChange(filtered);
   };
 
   return (
@@ -93,10 +93,7 @@ function SpellInput({ word, value, onChange, onSubmit, spellWrongCounts = [], on
       <input
         ref={inputRef}
         value={value}
-        onChange={e => {
-          const filtered = e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, word.length);
-          onChange(filtered);
-        }}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         autoFocus
         autoComplete="off"
@@ -152,6 +149,25 @@ export default function Quiz({ reviewWords = null }) {
   useEffect(() => {
     if (w) setSpellWrongCounts(new Array(w.word.length).fill(0));
   }, [w?.id]);
+
+  // Auto-fill correct letter when wrong count reaches 3 at any position
+  useEffect(() => {
+    if (!w || spellState !== SPELL_NONE) return;
+    const word = w.word;
+    setSpellInput(prev => {
+      let changed = false;
+      const arr = prev.split('');
+      for (let i = 0; i < word.length; i++) {
+        if (spellWrongCounts[i] >= 3 && arr[i] !== word[i]) {
+          // Pad if needed
+          while (arr.length <= i) arr.push('');
+          arr[i] = word[i];
+          changed = true;
+        }
+      }
+      return changed ? arr.join('') : prev;
+    });
+  }, [spellWrongCounts, w?.id, spellState]);
 
   // ── Daily limit (kept for hint display) ──────────────────────────────────
   const [dailyLimit, setDailyLimit] = useState(20);
@@ -294,6 +310,7 @@ export default function Quiz({ reviewWords = null }) {
       setUserAnswer(''); setJudgment(null); setInputLocked(false);
       setSpellState(SPELL_NONE); setSpellInput('');
       setSpellCorrect(null);
+      setSpellWrongCounts([]);  // immediately clear, useEffect will init for new word
     }
   };
   handleContinueRef.current = handleContinue;

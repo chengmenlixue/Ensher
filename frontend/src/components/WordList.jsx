@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
 
 const MASTERY = ['New','Recognize','Familiar','Understand','Mastered','Expert'];
 const MC = ['text-zinc-500','text-rose-500','text-orange-500','text-amber-500','text-emerald-600','text-amber-600'];
 const MB = ['badge-zinc','badge-rose','badge-amber','badge-amber','badge-emerald','badge-amber'];
 const MASTERY_COLORS = ['#71717a','#f43f5e','#f97316','#f59e0b','#10b981','#eab308'];
+const RETAIN_COLORS = ['var(--retain-1)','var(--retain-2)','var(--retain-3)','var(--retain-4)','var(--retain-5)','var(--retain-6)'];
 
 const SORTS = [
   { id: 'ebbinghaus', label: '遗忘曲线' },
@@ -12,11 +13,10 @@ const SORTS = [
   { id: 'alpha',      label: '字母排序' },
 ];
 
-const RETAIN_COLORS = ['var(--retain-1)','var(--retain-2)','var(--retain-3)','var(--retain-4)','var(--retain-5)','var(--retain-6)'];
+const PAGE_SIZE = 60;
 
-// ─── 2D Ebbinghaus retention curve ──────────────────────────────────────
-function EbbinghausCurve({ mastery, lastReviewedAt, compact }) {
-  // Urgency: mastery adjusted by days since last review
+// ─── 2D Ebbinghaus retention curve (full, only in expanded view) ───────
+const EbbinghausCurveExpanded = memo(function EbbinghausCurveExpanded({ mastery, lastReviewedAt }) {
   let urgency = Math.min(5, Math.max(0, mastery ?? 0));
   let daysSinceReview = 0;
   if (lastReviewedAt) {
@@ -25,130 +25,67 @@ function EbbinghausCurve({ mastery, lastReviewedAt, compact }) {
     else if (daysSinceReview > 3) urgency = Math.max(0, urgency - 1);
   }
   urgency = Math.max(0, Math.min(4, urgency));
-
-  // Map urgency to Y position (0=bottom=urgent/red, 4=top=retentioned/green)
-  const urgencyT = urgency / 4; // 0 to 1
-  // Map days to X position (0=left=recent, 10=right=old)
+  const urgencyT = urgency / 4;
   const daysT = Math.min(1, daysSinceReview / 10);
-
-  // Dot color based on urgency
   const dotColor = RETAIN_COLORS[urgency];
 
-  if (compact) {
-    // Compact: 52×22 SVG — simplified curve with colored dot
-    return (
-      <svg width={52} height={22} viewBox="0 0 52 22" className="flex-shrink-0" style={{ display: 'block' }}>
-        {/* Track area */}
-        <rect x={2} y={9} width={48} height={4} rx={2} fill="var(--neu-bg-dark)" opacity={0.6} />
-        {/* Ebbinghaus decay curve */}
-        <path
-          d={`M 2,11 C 10,11 16,5 26,5 C 34,5 40,11 50,11`}
-          fill="none"
-          stroke={dotColor}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          opacity={0.35}
-        />
-        {/* Dot — positioned along the curve based on urgency */}
-        <circle
-          cx={4 + daysT * 44}
-          cy={11 - urgencyT * 6}
-          r={3.5}
-          fill={dotColor}
-          style={{ filter: `drop-shadow(0 0 4px ${dotColor})` }}
-        />
-        {/* Pulse ring */}
-        <circle
-          cx={4 + daysT * 44}
-          cy={11 - urgencyT * 6}
-          r={5.5}
-          fill="none"
-          stroke={dotColor}
-          strokeWidth={0.8}
-          opacity={0.4}
-        />
-      </svg>
-    );
-  }
-
-  // Expanded: full 80×36 SVG with axis lines and labels
   return (
     <svg width={80} height={36} viewBox="0 0 80 36" className="flex-shrink-0" style={{ display: 'block' }}>
-      {/* Background subtle grid */}
       <line x1={12} y1={30} x2={76} y2={30} stroke="var(--neu-shadow-dark)" strokeWidth={0.5} opacity={0.5} />
       <line x1={12} y1={6} x2={12} y2={30} stroke="var(--neu-shadow-dark)" strokeWidth={0.5} opacity={0.5} />
-
-      {/* X axis label */}
       <text x={44} y={35} textAnchor="middle" fontSize={5} fill="var(--text-secondary)" opacity={0.5}>time →</text>
-      {/* Y axis label */}
       <text x={4} y={20} textAnchor="middle" fontSize={5} fill="var(--text-secondary)" opacity={0.5} transform="rotate(-90 4 20)">R</text>
-
-      {/* Ebbinghaus decay curve — full */}
-      <path
-        d={`M 12,6 C 28,6 38,22 76,30`}
-        fill="none"
-        stroke={dotColor}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        opacity={0.4}
-      />
-      {/* Secondary reference curves (fainter) */}
-      <path
-        d={`M 12,6 C 24,6 32,18 76,26`}
-        fill="none"
-        stroke={dotColor}
-        strokeWidth={1}
-        strokeLinecap="round"
-        opacity={0.2}
-        strokeDasharray="2 2"
-      />
-      <path
-        d={`M 12,6 C 32,6 42,24 76,32`}
-        fill="none"
-        stroke={dotColor}
-        strokeWidth={1}
-        strokeLinecap="round"
-        opacity={0.15}
-        strokeDasharray="2 2"
-      />
-
-      {/* Current position dot */}
-      <circle
-        cx={12 + daysT * 60}
-        cy={6 + (1 - urgencyT) * 24}
-        r={5}
-        fill={dotColor}
-        style={{ filter: `drop-shadow(0 0 6px ${dotColor})` }}
-      />
-      {/* Inner highlight */}
-      <circle
-        cx={12 + daysT * 60}
-        cy={6 + (1 - urgencyT) * 24}
-        r={2}
-        fill="white"
-        opacity={0.5}
-      />
-      {/* Pulse ring */}
-      <circle
-        cx={12 + daysT * 60}
-        cy={6 + (1 - urgencyT) * 24}
-        r={8}
-        fill="none"
-        stroke={dotColor}
-        strokeWidth={0.8}
-        opacity={0.35}
-      />
+      <path d={`M 12,6 C 28,6 38,22 76,30`} fill="none" stroke={dotColor} strokeWidth={1.8} strokeLinecap="round" opacity={0.4} />
+      <path d={`M 12,6 C 24,6 32,18 76,26`} fill="none" stroke={dotColor} strokeWidth={1} strokeLinecap="round" opacity={0.2} strokeDasharray="2 2" />
+      <path d={`M 12,6 C 32,6 42,24 76,32`} fill="none" stroke={dotColor} strokeWidth={1} strokeLinecap="round" opacity={0.15} strokeDasharray="2 2" />
+      <circle cx={12 + daysT * 60} cy={6 + (1 - urgencyT) * 24} r={5} fill={dotColor} style={{ filter: `drop-shadow(0 0 6px ${dotColor})` }} />
+      <circle cx={12 + daysT * 60} cy={6 + (1 - urgencyT) * 24} r={2} fill="white" opacity={0.5} />
+      <circle cx={12 + daysT * 60} cy={6 + (1 - urgencyT) * 24} r={8} fill="none" stroke={dotColor} strokeWidth={0.8} opacity={0.35} />
     </svg>
+  );
+});
+
+// ─── Compact urgency indicator (CSS only, replaces SVG) ───────────────
+function UrgencyDot({ mastery, lastReviewedAt }) {
+  let urgency = Math.min(5, Math.max(0, mastery ?? 0));
+  let daysSinceReview = 0;
+  if (lastReviewedAt) {
+    daysSinceReview = (Date.now() - new Date(lastReviewedAt.replace(' ', 'T')).getTime()) / 86400000;
+    if (daysSinceReview > 7) urgency = Math.max(0, urgency - 2);
+    else if (daysSinceReview > 3) urgency = Math.max(0, urgency - 1);
+  }
+  urgency = Math.max(0, Math.min(4, urgency));
+  const color = RETAIN_COLORS[urgency];
+  const daysT = Math.min(1, daysSinceReview / 10);
+
+  return (
+    <div className="flex-shrink-0 flex items-center" style={{ width: 52, height: 22 }}>
+      <div style={{
+        width: 48, height: 4, borderRadius: 2,
+        background: 'var(--neu-bg-dark)', opacity: 0.6,
+        position: 'relative', marginLeft: 2,
+      }}>
+        <div style={{
+          position: 'absolute',
+          left: daysT * 38,
+          top: -5,
+          width: 10, height: 10, borderRadius: '50%',
+          background: color,
+          boxShadow: `0 0 6px ${color}`,
+          transition: 'left 0.2s ease',
+        }} />
+      </div>
+    </div>
   );
 }
 
-// ─── Word card ─────────────────────────────────────────────────────────
-function Card({ w, onDelete, onEdit, showRetention }) {
+// ─── Memoized Word card ────────────────────────────────────────────────
+const Card = memo(function Card({ w, onDelete, onEdit, showRetention }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="neu-card-sm card-hover cursor-pointer" onClick={() => setOpen(v => !v)}>
       <div className="flex items-center gap-3 px-4 py-3">
-        {showRetention && <EbbinghausCurve mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} compact />}
+        {showRetention && !open && <UrgencyDot mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} />}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-base font-bold word-display">{w.word}</span>
@@ -169,11 +106,10 @@ function Card({ w, onDelete, onEdit, showRetention }) {
       </div>
       {open && (
         <div className="px-4 pb-4 pt-2 border-t border-gray-200/50">
-          {/* Expanded urgency + mastery indicators */}
           <div className="flex items-center gap-3 mb-3 py-2 px-3 rounded-lg" style={{ background: 'var(--neu-bg-dark)', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)' }}>
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Urgency</span>
-              <EbbinghausCurve mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} compact={false} />
+              <EbbinghausCurveExpanded mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} />
             </div>
             <div className="w-px h-4 bg-gray-300/30" />
             <div className="flex items-center gap-1.5">
@@ -192,7 +128,7 @@ function Card({ w, onDelete, onEdit, showRetention }) {
       )}
     </div>
   );
-}
+});
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 const getDateGroup = (createdAt) => {
@@ -230,9 +166,15 @@ export default function WordList({ onEditWord }) {
   const [openGroups, setOpenGroups] = useState({});
   const [dateFilter, setDateFilter] = useState('all');
   const [masteryFilter, setMasteryFilter] = useState('all');
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [masteryCounts, setMasteryCounts] = useState(null);
   const pillRef = useRef(null);
   const masteryPillRef = useRef(null);
   const letterRefs = useRef({});
+  const loaderRef = useRef(null);
+  const loadingRef = useRef(false);
 
   // ResizeObserver for date pill
   useEffect(() => {
@@ -276,7 +218,34 @@ export default function WordList({ onEditWord }) {
     return () => observer.disconnect();
   }, [masteryFilter]);
 
-  const load = async () => {
+  const fetchMasteryCounts = useCallback(async () => {
+    try {
+      const counts = await WordService.GetMasteryCounts();
+      setMasteryCounts(counts);
+    } catch (e) { console.error('GetMasteryCounts:', e); }
+  }, []);
+
+  // Initial load: use parallel GetWordsAndStats (goroutines in Go)
+  const loadInitial = useCallback(async () => {
+    setInitialLoading(true);
+    loadingRef.current = true;
+    try {
+      const data = await WordService.GetWordsAndStats(sort, 1, PAGE_SIZE, search.trim(), masteryFilter);
+      setWords(data.words || []);
+      setTotalCount(data.total);
+      setHasMore(data.hasMore);
+      setPage(1);
+      // Fetch mastery counts in parallel with the page load
+      fetchMasteryCounts();
+    } catch (e) { console.error(e); }
+    setInitialLoading(false);
+    loadingRef.current = false;
+  }, [sort, search, masteryFilter, fetchMasteryCounts]);
+
+  // Load all words (for alpha/date views that need grouping)
+  const loadAll = useCallback(async () => {
+    setInitialLoading(true);
+    loadingRef.current = true;
     try {
       let r;
       if (search.trim()) {
@@ -289,22 +258,67 @@ export default function WordList({ onEditWord }) {
         r = await WordService.GetWordsByEbbinghaus();
       }
       setWords(r || []);
+      setTotalCount((r || []).length);
+      setHasMore(false);
     } catch (e) { console.error(e); }
     setInitialLoading(false);
-  };
+    loadingRef.current = false;
+  }, [sort, search]);
 
-  useEffect(() => { load(); }, []);
-  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [sort, search]);
+  // Load more (infinite scroll for ebbinghaus view)
+  const loadMore = useCallback(async () => {
+    if (loadingRef.current || !hasMore) return;
+    loadingRef.current = true;
+    try {
+      const nextPage = page + 1;
+      const result = await WordService.GetWordPage(sort, nextPage, PAGE_SIZE, search.trim(), masteryFilter);
+      setWords(prev => [...prev, ...(result.words || [])]);
+      setPage(nextPage);
+      setHasMore(result.hasMore);
+      setTotalCount(result.total);
+    } catch (e) { console.error(e); }
+    loadingRef.current = false;
+  }, [page, hasMore, sort, search, masteryFilter]);
+
+  // Decide loading strategy per view
+  const usePagination = (sort === 'ebbinghaus' || search.trim()) && !masteryFilter.includes('all') || sort === 'ebbinghaus';
+
+  useEffect(() => {
+    if (sort === 'ebbinghaus') {
+      loadInitial();
+    } else {
+      loadAll();
+    }
+  }, [sort, search, masteryFilter, loadInitial, loadAll]);
 
   // Reset mastery filter when switching away from ebbinghaus
   useEffect(() => {
     if (sort !== 'ebbinghaus') setMasteryFilter('all');
   }, [sort]);
 
+  // Infinite scroll observer
+  useEffect(() => {
+    if (sort !== 'ebbinghaus' || !hasMore) return;
+    const loader = loaderRef.current;
+    if (!loader) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingRef.current) {
+          loadMore();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(loader);
+    return () => observer.disconnect();
+  }, [sort, hasMore, loadMore]);
+
   const del = useCallback(async (id) => {
     await WordService.DeleteWord(id);
     setWords(prev => prev.filter(w => w.id !== id));
-  }, []);
+    setTotalCount(prev => prev - 1);
+    fetchMasteryCounts();
+  }, [fetchMasteryCounts]);
 
   const toggleGroup = useCallback((key) => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] })), []);
 
@@ -328,6 +342,9 @@ export default function WordList({ onEditWord }) {
     return g;
   }, []);
 
+  const alphaView = useMemo(() => buildAlpha(words), [words, buildAlpha]);
+  const allLetters = Object.keys(alphaView).sort();
+
   const buildMastery = useCallback((wordList) => {
     const g = {};
     wordList.forEach(w => {
@@ -337,9 +354,6 @@ export default function WordList({ onEditWord }) {
     });
     return g;
   }, []);
-
-  const alphaView = useMemo(() => buildAlpha(words), [words, buildAlpha]);
-  const allLetters = Object.keys(alphaView).sort();
 
   const masteryGroups = useMemo(() => buildMastery(words), [words, buildMastery]);
 
@@ -360,19 +374,16 @@ export default function WordList({ onEditWord }) {
     }
   }, [sort, search, words, buildAlpha]);
 
-  // Scroll to a letter element
   const scrollToLetter = useCallback((letter) => {
     const el = letterRefs.current[letter];
     if (el) {
       const scroller = el.closest('.overflow-auto');
       if (scroller) {
-        const headerH = scroller.previousElementSibling?.offsetHeight || 0;
         scroller.scrollTo({ top: el.offsetTop - scroller.offsetTop - 8, behavior: 'smooth' });
       }
     }
   }, []);
 
-  // Hover handlers
   const handleLetterMouseEnter = useCallback((letter) => {
     setHoveredLetter(letter);
     if (openGroups[letter] === false) toggleGroup(letter);
@@ -408,17 +419,13 @@ export default function WordList({ onEditWord }) {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h2 className="text-2xl font-bold text-gray-700">My Words</h2>
-              <p className="text-sm text-gray-400">{words.length} words{search.trim() ? ` — "${search.trim()}"` : ''}</p>
+              <p className="text-sm text-gray-400">{totalCount} words{search.trim() ? ` — "${search.trim()}"` : ''}</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="neu-raised-sm p-1 flex gap-0.5">
                 {SORTS.map(s => (
                   <button key={s.id} onClick={() => setSort(s.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                      sort === s.id
-                        ? 'neu-pressed-sm text-gray-700 dark:text-gray-200'
-                        : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300'
-                    }`}>{s.label}</button>
+                    className={"px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 " + (sort === s.id ? 'neu-pressed-sm text-gray-700 dark:text-gray-200' : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300')}>{s.label}</button>
                 ))}
               </div>
               <input
@@ -446,9 +453,7 @@ export default function WordList({ onEditWord }) {
                   <button
                     key={tab.id}
                     onClick={() => setDateFilter(tab.id)}
-                    className={`relative flex-1 text-center py-2 rounded-lg text-xs font-semibold z-10 transition-colors duration-150 whitespace-nowrap ${
-                      dateFilter === tab.id ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'
-                    }`}
+                    className={"relative flex-1 text-center py-2 rounded-lg text-xs font-semibold z-10 transition-colors duration-150 whitespace-nowrap " + (dateFilter === tab.id ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600')}
                   >
                     <span>{tab.label}</span>
                     <span className={`block text-[10px] mt-0.5 font-normal ${dateFilter === tab.id ? 'text-emerald-500' : 'text-gray-400'}`}>
@@ -470,8 +475,8 @@ export default function WordList({ onEditWord }) {
               />
               {MASTERY_TABS.map(tab => {
                 const count = tab.id === 'all'
-                  ? words.length
-                  : (masteryGroups[tab.id]?.length ?? 0);
+                  ? totalCount
+                  : (masteryCounts?.[tab.id] ?? masteryGroups[tab.id]?.length ?? 0);
                 const levelIdx = tab.id === 'all' ? null : parseInt(tab.id, 10);
                 const barColor = levelIdx !== null ? RETAIN_COLORS[Math.min(levelIdx, 5)] : null;
                 const isActive = masteryFilter === tab.id;
@@ -479,9 +484,7 @@ export default function WordList({ onEditWord }) {
                   <button
                     key={tab.id}
                     onClick={() => setMasteryFilter(tab.id)}
-                    className={`relative flex-1 text-center py-2 rounded-lg text-xs font-semibold z-10 transition-colors duration-150 whitespace-nowrap ${
-                      isActive ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600'
-                    }`}
+                    className={"relative flex-1 text-center py-2 rounded-lg text-xs font-semibold z-10 transition-colors duration-150 whitespace-nowrap " + (isActive ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-600')}
                   >
                     <span>{tab.label}</span>
                     <span className={`block text-[10px] mt-0.5 font-normal ${isActive ? 'text-emerald-500' : 'text-gray-400'}`}>
@@ -507,7 +510,7 @@ export default function WordList({ onEditWord }) {
           {/* Search hint */}
           {search.trim() && !initialLoading && words.length > 0 && (
             <p className="text-xs text-gray-400 mb-4 px-1">
-              共找到 <span className="font-semibold text-gray-500">{words.length}</span> 个结果
+              共找到 <span className="font-semibold text-gray-500">{totalCount}</span> 个结果
             </p>
           )}
         </div>
@@ -541,13 +544,7 @@ export default function WordList({ onEditWord }) {
                       onClick={() => toggleGroup(letter)}
                       onMouseEnter={() => handleLetterMouseEnter(letter)}
                       onMouseLeave={handleLetterMouseLeave}
-                      className={`w-full text-center py-1.5 text-xs font-bold rounded-lg transition-all duration-150
-                        ${openGroups[letter] !== false
-                          ? 'text-emerald-600 bg-emerald-50 neu-pressed-sm'
-                          : hoveredLetter === letter
-                            ? 'text-emerald-500'
-                            : 'text-gray-400 hover:text-gray-600'
-                        }`}>
+                      className={"w-full text-center py-1.5 text-xs font-bold rounded-lg transition-all duration-150 " + (openGroups[letter] !== false ? 'text-emerald-600 bg-emerald-50 neu-pressed-sm' : hoveredLetter === letter ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600')}>
                       {letter}
                     </button>
                   ))}
@@ -613,7 +610,7 @@ export default function WordList({ onEditWord }) {
             </div>
           )}
 
-          {/* ── Ebbinghaus layout (words only) ────────────────────── */}
+          {/* ── Ebbinghaus layout with infinite scroll ──────────── */}
           {isFlat && !initialLoading && words.length > 0 && (
             <div>
               {/* Dashed separator */}
@@ -634,6 +631,12 @@ export default function WordList({ onEditWord }) {
                   {masteryFilteredWords.map(w => (
                     <Card key={w.id} w={w} onDelete={del} onEdit={onEditWord} showRetention={showRetention} />
                   ))}
+                  {/* Infinite scroll trigger */}
+                  {hasMore && (
+                    <div ref={loaderRef} className="text-center py-6 text-gray-400 text-sm animate-pulse">
+                      Loading more...
+                    </div>
+                  )}
                 </div>
               )}
             </div>

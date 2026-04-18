@@ -8,15 +8,17 @@ function getGreeting() {
   return 'Good evening!';
 }
 
-export default function Dashboard({ onNav }) {
+export default function Dashboard({ onNav, visible }) {
   const [stats, setStats] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [greeting, setGreeting] = useState(getGreeting);
   useEffect(() => {
+    if (!visible) return;
+    setStats(null);
     WordService.GetStats()
       .then(s => { setStats(s); setLoadError(false); })
       .catch(e => { console.error('[Dashboard] GetStats error:', e); setLoadError(true); });
-  }, []);
+  }, [visible]);
 
   if (loadError) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ background: 'var(--neu-bg)' }}>

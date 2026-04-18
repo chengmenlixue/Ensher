@@ -164,7 +164,7 @@ export default function App() {
         {/* Pages */}
         <main className="flex-1 m-3 ml-3 neu-raised-sm overflow-y-auto">
           <div style={{ display: page === 'dashboard' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
-            <Dashboard onNav={navigate} />
+            <Dashboard onNav={navigate} visible={page === 'dashboard'} />
           </div>
           <div style={{ display: page === 'add' ? 'flex' : 'none', flexDirection: 'column' }} className="animate-fade-in h-full">
             <AddWord onAdded={() => navigate('words')} />
@@ -199,11 +199,11 @@ export default function App() {
               }}
               className="article-tooltip neu-card-sm p-4"
             >
-              <p className="text-base font-bold text-gray-800">{tooltip.word.word}</p>
-              {tooltip.word.phonetic && <p className="text-xs text-gray-400 mb-2">{tooltip.word.phonetic}</p>}
-              {tooltip.word.definition && <p className="text-sm text-gray-700 mb-1">{tooltip.word.definition}</p>}
-              {tooltip.word.definitionZh && <p className="text-sm text-gray-500 mb-1">{tooltip.word.definitionZh}</p>}
-              {tooltip.word.example && <p className="text-xs text-gray-400 italic mt-2">"{tooltip.word.example}"</p>}
+              <p className="tooltip-word">{tooltip.word.word}</p>
+              {tooltip.word.phonetic && <p className="tooltip-phonetic">{tooltip.word.phonetic}</p>}
+              {tooltip.word.definition && <p className="tooltip-definition">{tooltip.word.definition}</p>}
+              {tooltip.word.definitionZh && <p className="tooltip-definition-zh">{tooltip.word.definitionZh}</p>}
+              {tooltip.word.example && <p className="tooltip-example">"{tooltip.word.example}"</p>}
             </div>
           );
         })()}

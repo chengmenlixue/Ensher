@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	_ "github.com/mattn/go-sqlite3"
@@ -327,6 +329,192 @@ func (w *WordService) GetWordsByDate() ([]Word, error) {
 
 // GetWordsByEbbinghaus sorts by urgency using a spaced-repetition score.
 // Words with low mastery + long time since last review appear first.
+// ── Paginated query ────────────────────────────────────────────────────
+
+type WordPage struct {
+	Words   []Word `json:"words"`
+	Total   int    `json:"total"`
+	HasMore bool   `json:"hasMore"`
+}
+
+// GetWordPage returns a paginated, filtered slice of words.
+// sort: "ebbinghaus" | "date" | "alpha"
+// page: 1-based page number
+// pageSize: items per page (e.g. 50)
+// search: free-text query (empty = no filter)
+// masteryFilter: "all" | "0"-"5"
+func (w *WordService) GetWordPage(sort string, page, pageSize int, search, masteryFilter string) (*WordPage, error) {
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	if page <= 0 {
+		page = 1
+	}
+
+	var where string
+	var args []interface{}
+
+	// Build WHERE clause
+	conditions := []string{}
+	if search != "" {
+		conditions = append(conditions, "(word LIKE ? OR definition LIKE ? OR tags LIKE ? OR definition_zh LIKE ?)")
+		q := "%" + search + "%"
+		args = append(args, q, q, q, q)
+	}
+	if masteryFilter != "" && masteryFilter != "all" {
+		level, err := strconv.Atoi(masteryFilter)
+		if err == nil && level >= 0 && level <= 5 {
+			conditions = append(conditions, "mastery_level = ?")
+			args = append(args, level)
+		}
+	}
+	if len(conditions) > 0 {
+		where = "WHERE " + conditions[0]
+		for i := 1; i < len(conditions); i++ {
+			where += " AND " + conditions[i]
+		}
+	}
+
+	// Count total (single query)
+	var total int
+	countArgs := make([]interface{}, len(args))
+	copy(countArgs, args)
+	w.db.QueryRow("SELECT COUNT(*) FROM words "+where, countArgs...).Scan(&total)
+
+	// Build ORDER BY
+	orderBy := "ORDER BY created_at DESC"
+	switch sort {
+	case "alpha":
+		orderBy = "ORDER BY word COLLATE NOCASE ASC"
+	case "ebbinghaus":
+		orderBy = "ORDER BY ((5 - mastery_level) * 10 + CAST(julianday('now') - julianday(COALESCE(NULLIF(last_reviewed_at, ''), 'now')) AS INTEGER)) DESC, mastery_level ASC"
+	}
+
+	offset := (page - 1) * pageSize
+	query := "SELECT id, word, phonetic, definition, definition_zh, example, notes, tags, mastery_level, review_count, created_at, last_reviewed_at FROM words " +
+		where + " " + orderBy + " LIMIT ? OFFSET ?"
+	queryArgs := append(args, pageSize, offset)
+
+	rows, err := w.db.Query(query, queryArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	words, err := w.scanWords(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WordPage{
+		Words:   words,
+		Total:   total,
+		HasMore: offset+len(words) < total,
+	}, nil
+}
+
+// ── Parallel loading with goroutines ───────────────────────────────────
+
+type WordListData struct {
+	Words    []Word                 `json:"words"`
+	Total    int                    `json:"total"`
+	Stats    map[string]interface{} `json:"stats"`
+	HasMore  bool                   `json:"hasMore"`
+}
+
+// GetWordsAndStats loads words + stats in parallel using goroutines.
+// This cuts initial page load time roughly in half.
+func (w *WordService) GetWordsAndStats(sort string, page, pageSize int, search, masteryFilter string) (*WordListData, error) {
+	type pageResult struct {
+		data *WordPage
+		err  error
+	}
+	type statsResult struct {
+		data map[string]interface{}
+		err  error
+	}
+
+	pageCh := make(chan pageResult, 1)
+	statsCh := make(chan statsResult, 1)
+
+	// Goroutine 1: load word page
+	go func() {
+		p, err := w.GetWordPage(sort, page, pageSize, search, masteryFilter)
+		pageCh <- pageResult{data: p, err: err}
+	}()
+
+	// Goroutine 2: load stats
+	go func() {
+		s, err := w.GetStats()
+		statsCh <- statsResult{data: s, err: err}
+	}()
+
+	// Wait for both goroutines
+	pr := <-pageCh
+	sr := <-statsCh
+
+	if pr.err != nil {
+		return nil, pr.err
+	}
+	if sr.err != nil {
+		return nil, sr.err
+	}
+
+	return &WordListData{
+		Words:   pr.data.Words,
+		Total:   pr.data.Total,
+		Stats:   sr.data,
+		HasMore: pr.data.HasMore,
+	}, nil
+}
+
+// GetMasteryCounts returns word counts per mastery level.
+// Uses goroutines for parallel counting.
+func (w *WordService) GetMasteryCounts() (map[string]int, error) {
+	counts := make(map[string]int, 7)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var firstErr error
+
+	queries := []struct {
+		key   string
+		query string
+	}{
+		{"total", "SELECT COUNT(*) FROM words"},
+		{"0", "SELECT COUNT(*) FROM words WHERE mastery_level = 0"},
+		{"1", "SELECT COUNT(*) FROM words WHERE mastery_level = 1"},
+		{"2", "SELECT COUNT(*) FROM words WHERE mastery_level = 2"},
+		{"3", "SELECT COUNT(*) FROM words WHERE mastery_level = 3"},
+		{"4", "SELECT COUNT(*) FROM words WHERE mastery_level = 4"},
+		{"5", "SELECT COUNT(*) FROM words WHERE mastery_level = 5"},
+	}
+
+	for _, q := range queries {
+		wg.Add(1)
+		go func(key, query string) {
+			defer wg.Done()
+			var count int
+			if err := w.db.QueryRow(query).Scan(&count); err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+				return
+			}
+			mu.Lock()
+			counts[key] = count
+			mu.Unlock()
+		}(q.key, q.query)
+	}
+	wg.Wait()
+
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return counts, nil
+}
+
 func (w *WordService) GetWordsByEbbinghaus() ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
 		mastery_level, review_count, created_at, last_reviewed_at FROM words
@@ -411,18 +599,22 @@ func (w *WordService) SubmitQuizAnswer(wordID int64, correct bool) (*QuizResult,
 }
 
 func (w *WordService) GetStats() (map[string]interface{}, error) {
-	var total, mastered, learning, newWords, reviewed int
-	w.db.QueryRow(`SELECT COUNT(*) FROM words`).Scan(&total)
-	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE mastery_level >= 4`).Scan(&mastered)
-	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE mastery_level > 0 AND mastery_level < 4`).Scan(&learning)
-	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE mastery_level = 0`).Scan(&newWords)
-	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE review_count > 0`).Scan(&reviewed)
-
-	var todayCount int
-	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE DATE(created_at) = DATE('now')`).Scan(&todayCount)
-
-	var aiCount int
-	w.db.QueryRow(`SELECT COUNT(*) FROM words WHERE phonetic IS NOT NULL AND phonetic != ''`).Scan(&aiCount)
+	// Single query scans table once instead of 7 separate queries
+	var total, mastered, learning, newWords, reviewed, todayCount, aiCount int
+	err := w.db.QueryRow(`
+		SELECT
+			COUNT(*),
+			SUM(CASE WHEN mastery_level >= 4 THEN 1 ELSE 0 END),
+			SUM(CASE WHEN mastery_level > 0 AND mastery_level < 4 THEN 1 ELSE 0 END),
+			SUM(CASE WHEN mastery_level = 0 THEN 1 ELSE 0 END),
+			SUM(CASE WHEN review_count > 0 THEN 1 ELSE 0 END),
+			SUM(CASE WHEN DATE(created_at) = DATE('now') THEN 1 ELSE 0 END),
+			SUM(CASE WHEN phonetic IS NOT NULL AND phonetic != '' THEN 1 ELSE 0 END)
+		FROM words
+	`).Scan(&total, &mastered, &learning, &newWords, &reviewed, &todayCount, &aiCount)
+	if err != nil {
+		return nil, err
+	}
 
 	return map[string]interface{}{
 		"total":    total,

@@ -2,17 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
 import * as AIService from "../../bindings/ensher/aiservice";
 import { useAI } from '../App';
+import { useLang } from '../i18n';
 
 // ── Mode definitions ─────────────────────────────────────────────────────────
-const MODES = [
-  { id: 'recall',  label: '回忆模式', sub: '看中文拼写单词' },
-  { id: 'judge',   label: '认知模式', sub: '看英文判断是否认识' },
+const MODE_KEYS = [
+  { id: 'recall',  labelKey: 'qz.recall', subKey: 'qz.recallSub' },
+  { id: 'judge',   labelKey: 'qz.recognize', subKey: 'qz.recognizeSub' },
 ];
 
 // ── Spelling input: underline-style text field ────────────────────────────────
 function SpellInput({ word, value, onChange, onSubmit, spellWrongCounts = [], onWrongAttempt }) {
   const inputRef = useRef(null);
   const prevValueRef = useRef('');
+  const { t } = useLang();
 
   // Sync ref when value changes externally (e.g. retry/reset)
   useEffect(() => {
@@ -105,7 +107,7 @@ function SpellInput({ word, value, onChange, onSubmit, spellWrongCounts = [], on
       />
 
       {/* Hint */}
-      <p className="text-center text-xs text-gray-400 mt-1.5">点击输入或直接打字</p>
+      <p className="text-center text-xs text-gray-400 mt-1.5">{t('qz.clickToType')}</p>
     </div>
   );
 }
@@ -117,6 +119,8 @@ const SPELL_DONE  = 1;
 
 export default function Quiz({ reviewWords = null }) {
   const { aiEnabled } = useAI();
+  const { t } = useLang();
+  const MODES = MODE_KEYS.map(m => ({ id: m.id, label: t(m.labelKey), sub: t(m.subKey) }));
 
   // ── Core state ────────────────────────────────────────────────────────────
   const [mode, setMode]           = useState('recall'); // 'judge' | 'recall'
@@ -317,16 +321,16 @@ export default function Quiz({ reviewWords = null }) {
 
   // ── Loading / Empty ──────────────────────────────────────────────────────
   if (loading) return (
-    <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse">Loading...</div>
+    <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse">{t('qz.loading')}</div>
   );
 
   if (words.length === 0) return (
     <div className="flex-1 flex items-center justify-center animate-fade-in">
       <div className="neu-card p-10 text-center">
         <p className="text-6xl mb-4">📖</p>
-        <p className="text-lg font-bold text-gray-700 mb-1">No words to review</p>
-        <p className="text-sm text-gray-400 mb-6">Add some words first!</p>
-        <button onClick={load} className="btn btn-soft">Refresh</button>
+        <p className="text-lg font-bold text-gray-700 mb-1">{t('qz.noWords')}</p>
+        <p className="text-sm text-gray-400 mb-6">{t('qz.addWords')}</p>
+        <button onClick={load} className="btn btn-soft">{t('qz.refresh')}</button>
       </div>
     </div>
   );
@@ -335,7 +339,7 @@ export default function Quiz({ reviewWords = null }) {
   if (done) {
     const correct = results.filter(r => r.correct).length;
     const pct = results.length > 0 ? Math.round((correct / results.length) * 100) : 0;
-    const msg = pct === 100 ? 'Perfect!' : pct >= 80 ? 'Excellent!' : pct >= 60 ? 'Good job!' : 'Keep going!';
+    const msg = pct === 100 ? t('qz.perfect') : pct >= 80 ? t('qz.excellent') : pct >= 60 ? t('qz.goodJob') : t('qz.keepGoing');
     const accentColor = pct >= 80 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#6366f1';
     return (
       <div className="flex-1 flex items-center justify-center animate-fade-in">
@@ -351,7 +355,7 @@ export default function Quiz({ reviewWords = null }) {
           </div>
           <p className="text-4xl font-bold text-gray-800">{correct}/{results.length}</p>
           <p className="text-sm mt-1" style={{ color: accentColor }}>{msg}</p>
-          <button onClick={load} className="btn btn-primary mt-6">Try Again</button>
+          <button onClick={load} className="btn btn-primary mt-6">{t('qz.tryAgain')}</button>
         </div>
       </div>
     );
@@ -381,12 +385,12 @@ export default function Quiz({ reviewWords = null }) {
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-lg font-bold text-gray-700">拼写练习</h2>
+              <h2 className="text-lg font-bold text-gray-700">{t('qz.spellingPractice')}</h2>
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
                 className="text-gray-400 hover:text-emerald-500 transition-colors text-sm"
-                title="刷新复习词单"
+                title={t('qz.refreshList')}
               >
                 <span className={refreshing ? 'animate-spin' : ''}>↻</span>
               </button>
@@ -404,7 +408,7 @@ export default function Quiz({ reviewWords = null }) {
 
             {/* Prompt: Chinese meaning — always visible */}
             <div className="text-center mb-5">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">请拼写出这个单词</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{t('qz.spellPrompt')}</p>
               <p className="text-2xl font-bold text-gray-700 dark:text-gray-100 leading-snug">
                 {w.definitionZh || w.definition || '—'}
               </p>
@@ -435,10 +439,10 @@ export default function Quiz({ reviewWords = null }) {
                   }
                   className="btn btn-primary w-full py-3 text-base"
                 >
-                  提交
+                  {t('qz.submit')}
                 </button>
                 <p className="text-center text-xs text-gray-400">
-                  输错 3 次自动显示正确字母
+                  {t('qz.wrongHint')}
                 </p>
               </div>
             )}
@@ -456,7 +460,7 @@ export default function Quiz({ reviewWords = null }) {
                       <circle className="sparkle-3" cx="48" cy="40" r="1.8" fill="#10b981" opacity="0.4" />
                     </svg>
                   </div>
-                  <p className="text-base font-bold text-emerald-600">Correct!</p>
+                  <p className="text-base font-bold text-emerald-600">{t('qz.correct')}</p>
                   <p className="text-2xl font-bold word-display mt-1">{w.word}</p>
                   {w.phonetic && <p className="text-sm word-display-phonetic mt-0.5">{w.phonetic}</p>}
                 </div>
@@ -464,7 +468,7 @@ export default function Quiz({ reviewWords = null }) {
                 {/* Definition */}
                 {w.definition && (
                   <div className="neu-pressed-sm p-4">
-                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition</p>
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{t('qz.definition')}</p>
                     <p className="text-sm text-gray-600">{w.definition}</p>
                   </div>
                 )}
@@ -482,7 +486,7 @@ export default function Quiz({ reviewWords = null }) {
                       <line className="cross-r" x1="36" y1="20" x2="20" y2="36" stroke="#f43f5e" strokeWidth="3" strokeLinecap="round" />
                     </svg>
                   </div>
-                  <p className="text-sm font-bold text-rose-500 mb-2">Wrong!</p>
+                  <p className="text-sm font-bold text-rose-500 mb-2">{t('qz.wrong')}</p>
                   <p className="text-sm text-gray-400 line-through decoration-rose-400">{spellInput}</p>
                   <p className="text-2xl font-bold word-display mt-1">{w.word}</p>
                   {w.phonetic && <p className="text-sm word-display-phonetic mt-0.5">{w.phonetic}</p>}
@@ -491,19 +495,19 @@ export default function Quiz({ reviewWords = null }) {
                 {/* Definition */}
                 {w.definition && (
                   <div className="neu-pressed-sm p-4">
-                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition</p>
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{t('qz.definition')}</p>
                     <p className="text-sm text-gray-600">{w.definition}</p>
                   </div>
                 )}
                 {w.definitionZh && (
                   <div className="neu-pressed-sm p-4">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">中文释义</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('qz.definitionZh')}</p>
                     <p className="text-sm text-gray-500">{w.definitionZh}</p>
                   </div>
                 )}
                 {w.example && (
                   <div className="neu-pressed-sm p-4">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Example</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('qz.example')}</p>
                     <p className="text-sm text-gray-500 italic">{w.example}</p>
                   </div>
                 )}
@@ -513,9 +517,9 @@ export default function Quiz({ reviewWords = null }) {
             {/* Done state: action buttons */}
             {spellState === SPELL_DONE && (
               <div className="flex gap-3 mt-4">
-                <button onClick={spellRetry} className="btn btn-soft flex-1">重新尝试</button>
+                <button onClick={spellRetry} className="btn btn-soft flex-1">{t('qz.retry')}</button>
                 <button onClick={handleContinue} className="btn btn-primary flex-1">
-                  {idx + 1 >= words.length ? 'Finish ✓' : 'Next →'}
+                  {idx + 1 >= words.length ? t('qz.finish') : t('qz.next')}
                 </button>
               </div>
             )}
@@ -523,7 +527,7 @@ export default function Quiz({ reviewWords = null }) {
 
           {/* Hint */}
           {spellState === SPELL_NONE && (
-            <p className="text-center text-xs text-gray-400">每日复习上限 {dailyLimit} 词 · 可在 Settings 调整</p>
+            <p className="text-center text-xs text-gray-400">{t('qz.dailyLimit')} {dailyLimit} {t('qz.words')} · {t('qz.adjustSettings')}</p>
           )}
         </div>
       </div>
@@ -555,12 +559,12 @@ export default function Quiz({ reviewWords = null }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-gray-700">Daily Review</h2>
+            <h2 className="text-lg font-bold text-gray-700">{t('qz.dailyReview')}</h2>
             <button
               onClick={handleRefresh}
               disabled={refreshing}
               className="text-gray-400 hover:text-emerald-500 transition-colors text-sm"
-              title="刷新复习词单"
+              title={t('qz.refreshList')}
             >
               <span className={refreshing ? 'animate-spin' : ''}>↻</span>
             </button>
@@ -581,10 +585,10 @@ export default function Quiz({ reviewWords = null }) {
           {/* Step 1: Know or not */}
           {!show && (
             <div className="mt-4">
-              <p className="text-xs text-gray-400 mb-5 uppercase tracking-wider font-semibold text-center">Do you know this?</p>
+              <p className="text-xs text-gray-400 mb-5 uppercase tracking-wider font-semibold text-center">{t('qz.doYouKnow')}</p>
               <div className="flex gap-4 justify-center">
-                <button onClick={() => handleChoose(false)} className="btn btn-soft text-rose-500">✗ Don't know</button>
-                <button onClick={() => handleChoose(true)} className="btn btn-primary">✓ I know it!</button>
+                <button onClick={() => handleChoose(false)} className="btn btn-soft text-rose-500">{t('qz.dontKnow')}</button>
+                <button onClick={() => handleChoose(true)} className="btn btn-primary">{t('qz.iKnow')}</button>
               </div>
             </div>
           )}
@@ -594,13 +598,13 @@ export default function Quiz({ reviewWords = null }) {
             <div className="space-y-4 animate-fade-in">
               {/* Knowledge indicator */}
               <div className={`text-xs font-semibold uppercase tracking-wider text-center ${known === false ? 'text-rose-500' : 'text-emerald-600'}`}>
-                {known === false ? '✗ Did not know' : '✓ Knew it!'}
+                {known === false ? t('qz.didNotKnow') : t('qz.knewIt')}
               </div>
 
               {/* AI input when "I know it!" */}
               {known === true && aiEnabled && (
                 <div className="neu-pressed-sm p-4">
-                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">用中文写出你的理解</p>
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2">{t('qz.writeUnderstanding')}</p>
                   <textarea
                     className="neu-input w-full px-3 py-2 text-sm resize-none"
                     style={{ paddingTop: '8px', paddingBottom: '8px' }}
@@ -608,7 +612,7 @@ export default function Quiz({ reviewWords = null }) {
                     value={userAnswer}
                     readOnly={inputLocked}
                     onChange={e => !inputLocked && setUserAnswer(e.target.value)}
-                    placeholder="请用中文解释这个词的意思..."
+                    placeholder={t('qz.explainWord')}
                     onKeyDown={e => {
                       if (e.key !== 'Enter' || e.shiftKey) return;
                       e.preventDefault();
@@ -627,7 +631,7 @@ export default function Quiz({ reviewWords = null }) {
                   />
                   <button onClick={submitJudgment} disabled={judging || !userAnswer.trim()}
                     className="btn btn-warning btn-sm mt-2 w-full">
-                    {judging ? <><span className="animate-spin-slow">⟳</span> Judging...</> : 'AIDO 智能判断'}
+                    {judging ? <><span className="animate-spin-slow">⟳</span> {t('qz.judging')}</> : t('qz.aidoJudge')}
                   </button>
                 </div>
               )}
@@ -652,7 +656,7 @@ export default function Quiz({ reviewWords = null }) {
                             </svg>
                           )}
                         </span>
-                        <span className="text-sm font-bold text-gray-700">{judgment.correct === true ? '理解正确！' : '理解有误'}</span>
+                        <span className="text-sm font-bold text-gray-700">{judgment.correct === true ? t('qz.correctUnderstand') : t('qz.incorrectUnderstand')}</span>
                       </div>
                       {judgment.judgment && <p className="text-sm text-gray-600 mb-2">💬 {judgment.judgment}</p>}
                       {judgment.advice && <p className="text-sm text-amber-600 font-medium">📝 {judgment.advice}</p>}
@@ -661,13 +665,13 @@ export default function Quiz({ reviewWords = null }) {
                     <div className="flex items-start gap-3">
                       <span className="text-lg flex-shrink-0 mt-0.5">⚠️</span>
                       <div>
-                        <p className="text-sm font-semibold text-amber-600 mb-1">AI 判断失败</p>
+                        <p className="text-sm font-semibold text-amber-600 mb-1">{t('qz.aiJudgeFailed')}</p>
                         <p className="text-xs text-gray-500 leading-relaxed">{judgment.judgment.replace(/^⚠\s*/, '')}</p>
                       </div>
                     </div>
                   )}
                   <button onClick={() => { setJudgment(null); setUserAnswer(''); setInputLocked(false); }}
-                    className="btn btn-soft btn-sm mt-3 w-full">再来一次</button>
+                    className="btn btn-soft btn-sm mt-3 w-full">{t('qz.again')}</button>
                 </div>
               )}
 
@@ -675,13 +679,13 @@ export default function Quiz({ reviewWords = null }) {
               {(known === false || (known === true && (!aiEnabled || (judgment && judgment.correct === true)))) && (
                 <>
                   <div className="neu-pressed-sm p-4 border-2 border-emerald-300">
-                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition (EN)</p>
+                    <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{t('qz.definitionEn')}</p>
                     <p className="text-sm text-gray-700">{w.definition || '—'}</p>
-                    {w.definitionZh && <><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3 mb-1">中文释义</p><p className="text-sm text-gray-500">{w.definitionZh}</p></>}
+                    {w.definitionZh && <><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3 mb-1">{t('qz.definitionZh')}</p><p className="text-sm text-gray-500">{w.definitionZh}</p></>}
                   </div>
                   {w.example && (
                     <div className="neu-pressed-sm p-4 border-2 border-emerald-300">
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Example</p>
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{t('qz.example')}</p>
                       <p className="text-sm text-gray-600 italic">{w.example}</p>
                     </div>
                   )}
@@ -690,7 +694,7 @@ export default function Quiz({ reviewWords = null }) {
 
               {/* Continue */}
               <button onClick={handleContinue} className="btn btn-primary w-full mt-2">
-                {idx + 1 >= words.length ? 'Finish ✓' : 'Continue →'}
+                {idx + 1 >= words.length ? t('qz.finish') : t('qz.continue')}
               </button>
             </div>
           )}
@@ -699,7 +703,7 @@ export default function Quiz({ reviewWords = null }) {
         {/* Hint */}
         {!show && (
           <p className="text-center text-xs text-gray-400">
-            每日复习上限 {dailyLimit} 词 · 可在 Settings 调整
+            {t('qz.dailyLimit')} {dailyLimit} {t('qz.words')} · {t('qz.adjustSettings')}
           </p>
         )}
       </div>

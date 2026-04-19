@@ -3,6 +3,7 @@ import * as WordService from '../../bindings/ensher/wordservice';
 import * as AIService from '../../bindings/ensher/aiservice';
 import * as QuickLookup from '../../bindings/ensher/quicklookupservice';
 import { useAI } from '../App';
+import { useLang } from '../i18n';
 
 const isChinese = (str) => /[\u4e00-\u9fff]/.test(str);
 
@@ -177,6 +178,7 @@ export default function QuickLookupWidget() {
   const [skinCtx, setSkinCtx] = useState('neumorphic');
   const [themeCtx, setThemeCtx] = useState('light');
   const { aiEnabled, skin, theme, setSkin, setTheme } = useAI();
+  const { t } = useLang();
 
   // Sync theme/skin from context and listen for cross-window changes
   useEffect(() => {
@@ -389,7 +391,7 @@ export default function QuickLookupWidget() {
       {/* Title bar */}
       <div className="flex items-center justify-between px-4 pt-3.5 pb-2 flex-shrink-0" style={{ '--wails-draggable': 'drag' }}>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold tracking-widest" style={{ color: s.textMuted }}>QUICK LOOKUP</span>
+          <span className="text-[10px] font-bold tracking-widest" style={{ color: s.textMuted }}>{t('ql.title')}</span>
           <div className="w-px h-3" style={{ background: s.border }} />
           <span className="text-[10px]" style={{ color: s.accent }}>✦</span>
         </div>
@@ -416,7 +418,7 @@ export default function QuickLookupWidget() {
           onChange={e => { setWord(e.target.value); setResult(null); setResults([]); }}
           onKeyDown={handleKeyDown}
           disabled={searching}
-          placeholder={searching ? '查询中...' : '输入英文单词或中文释义，按 Enter 查询'}
+          placeholder={searching ? t('ql.searching') : t('ql.placeholder')}
           className="w-full px-4 py-3 rounded-2xl text-sm outline-none"
           style={{
             background: s.inputBg,
@@ -431,7 +433,7 @@ export default function QuickLookupWidget() {
         {searching && (
           <p className="text-[10px] mt-1.5 pl-1 flex items-center gap-1.5" style={{ color: s.textMuted }}>
             <span className="animate-spin-slow text-xs">⟳</span>
-            {searchPhase === 'ai' ? 'AI 查询中...' : 'Searching...'}
+            {searchPhase === 'ai' ? t('ql.aiSearching') : t('ql.searching')}
           </p>
         )}
       </div>
@@ -441,7 +443,7 @@ export default function QuickLookupWidget() {
         <div className="flex-1 overflow-auto px-4 pb-4 space-y-1.5">
           <p className="text-[10px] mb-2.5 pl-1 flex items-center gap-2" style={{ color: s.textMuted }}>
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: s.accent }} />
-            找到 {results.length} 个匹配
+            {t('ql.found')} {results.length} {t('ql.matches')}
             <span className="ml-1 flex items-center gap-1">
               <kbd className="px-1.5 py-0.5 rounded text-[9px]" style={{ background: s.inputBg, color: s.textSecondary, boxShadow: s.inputShadow ? 'none' : undefined }}>↑↓</kbd>
               <kbd className="px-1.5 py-0.5 rounded text-[9px]" style={{ background: s.inputBg, color: s.textSecondary }}>Enter</kbd>
@@ -491,17 +493,17 @@ export default function QuickLookupWidget() {
                   className="flex-shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 hover:brightness-110 active:scale-95"
                   style={{ background: s.accent, color: s.accentText, boxShadow: `0 4px 12px ${s.accent}40` }}
                 >
-                  {saving ? '...' : 'Save →'}
+                  {saving ? '...' : t('ql.save')}
                 </button>
               )}
               {isSaved && (
                 <span className="flex-shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1" style={{ color: s.accent, background: s.badgeSaved }}>
-                  <span style={{ color: s.accent }}>✓</span> Saved
+                  <span style={{ color: s.accent }}>✓</span> {t('ql.saved')}
                 </span>
               )}
               {result.from === 'db' && (
                 <span className="flex-shrink-0 px-2.5 py-1 rounded text-[10px] font-bold" style={{ color: s.accent, background: s.badgeMyWords }}>
-                  My Words
+                  {t('ql.myWords')}
                 </span>
               )}
             </div>
@@ -520,14 +522,14 @@ export default function QuickLookupWidget() {
             {result.learnResult && (result.learnResult.etymology || result.learnResult.roots || result.learnResult.memoryTip || result.learnResult.relatedWords) && (
               <div className="mt-1 pt-3 space-y-2.5" style={{ borderTop: `1px solid ${s.border}` }}>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold" style={{ color: s.accent }}>Deep Learn</span>
-                  <span className="text-[9px]" style={{ color: s.textMuted }}>— AI</span>
+                  <span className="text-[10px] font-bold" style={{ color: s.accent }}>{t('ql.deepLearn')}</span>
+                  <span className="text-[9px]" style={{ color: s.textMuted }}>{t('ql.ai')}</span>
                 </div>
                 {result.learnResult.etymology && (
                   <div>
                     <div className="flex items-center gap-1 mb-0.5">
                       <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#fbbf24' }} />
-                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#d97706' }}>词源</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#d97706' }}>{t('ql.etymology')}</span>
                     </div>
                     <p className="text-xs leading-relaxed pl-2" style={{ color: s.textSecondary }}>{result.learnResult.etymology}</p>
                   </div>
@@ -536,7 +538,7 @@ export default function QuickLookupWidget() {
                   <div>
                     <div className="flex items-center gap-1 mb-0.5">
                       <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#38bdf8' }} />
-                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#0284c7' }}>词根</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#0284c7' }}>{t('ql.roots')}</span>
                     </div>
                     <p className="text-xs leading-relaxed pl-2" style={{ color: s.textSecondary }}>{result.learnResult.roots}</p>
                   </div>
@@ -545,7 +547,7 @@ export default function QuickLookupWidget() {
                   <div>
                     <div className="flex items-center gap-1 mb-0.5">
                       <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#a78bfa' }} />
-                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#7c3aed' }}>记忆</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#7c3aed' }}>{t('ql.memoryTip')}</span>
                     </div>
                     <p className="text-xs leading-relaxed pl-2" style={{ color: s.textSecondary }}>{result.learnResult.memoryTip}</p>
                   </div>
@@ -554,7 +556,7 @@ export default function QuickLookupWidget() {
                   <div>
                     <div className="flex items-center gap-1 mb-0.5">
                       <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#34d399' }} />
-                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#059669' }}>同根</span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#059669' }}>{t('ql.relatedWords')}</span>
                     </div>
                     <div className="flex gap-1 flex-wrap pl-2">
                       {result.learnResult.relatedWords.split(/[,，]/).map((rw, i) => (
@@ -572,7 +574,7 @@ export default function QuickLookupWidget() {
         <div className="px-4 pb-4">
           <div className="rounded-2xl p-6 text-center" style={{ background: s.cardBg, border: `1px solid ${s.border}` }}>
             <p className="text-2xl mb-2">🔍</p>
-            <p className="text-xs" style={{ color: s.textMuted }}>数据库和 AI 均未找到该词</p>
+            <p className="text-xs" style={{ color: s.textMuted }}>{t('ql.notFound')}</p>
           </div>
         </div>
       )}
@@ -581,12 +583,12 @@ export default function QuickLookupWidget() {
       <div className="px-4 pb-3.5 pt-1 flex-shrink-0 flex items-center justify-center gap-4">
         <span className="flex items-center gap-1">
           <kbd className="px-1.5 py-0.5 rounded text-[9px]" style={{ background: s.inputBg, color: s.textSecondary }}>Enter</kbd>
-          <span className="text-[10px]" style={{ color: s.textMuted }}>查询</span>
+          <span className="text-[10px]" style={{ color: s.textMuted }}>{t('ql.search')}</span>
         </span>
         <div className="w-px h-3" style={{ background: s.border }} />
         <span className="flex items-center gap-1">
           <kbd className="px-1.5 py-0.5 rounded text-[9px]" style={{ background: s.inputBg, color: s.textSecondary }}>Esc</kbd>
-          <span className="text-[10px]" style={{ color: s.textMuted }}>关闭</span>
+          <span className="text-[10px]" style={{ color: s.textMuted }}>{t('ql.close')}</span>
         </span>
       </div>
     </div>

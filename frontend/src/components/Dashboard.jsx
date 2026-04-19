@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
+import { useLang } from '../i18n';
 
-const MASTERY = ['New','Recognize','Familiar','Understand','Mastered','Expert'];
+const MASTERY_KEYS = ['mastery.0','mastery.1','mastery.2','mastery.3','mastery.4','mastery.5'];
+const MASTERY_EN = ['New','Recognize','Familiar','Understand','Mastered','Expert'];
 const MASTERY_COLORS = ['#71717a','#f43f5e','#f97316','#f59e0b','#10b981','#eab308'];
 const RETAIN_COLORS = ['#f87171','#fb923c','#fbbf24','#a3e635','#34d399'];
 const MB = ['badge-zinc','badge-rose','badge-amber','badge-amber','badge-emerald','badge-amber'];
@@ -19,16 +21,18 @@ function computeUrgency(mastery, lastReviewedAt) {
   return Math.max(0, Math.min(4, urgency));
 }
 
-function getGreeting() {
+function getGreeting(t) {
   const h = new Date().getHours();
-  if (h >= 5 && h < 12) return 'Good morning!';
-  if (h >= 12 && h < 18) return 'Good afternoon!';
-  return 'Good evening!';
+  if (h >= 5 && h < 12) return t('dash.goodMorning');
+  if (h >= 12 && h < 18) return t('dash.goodAfternoon');
+  return t('dash.goodEvening');
 }
 
 // ─── Word list popup modal ──────────────────────────────────────────────
 function WordPopup({ title, accent, words, onClose }) {
   const [expandedId, setExpandedId] = useState(null);
+  const { t } = useLang();
+  const MASTERY = MASTERY_KEYS.map(k => t(k));
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -52,7 +56,7 @@ function WordPopup({ title, accent, words, onClose }) {
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full" style={{ background: accent }} />
             <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary, #374151)' }}>{title}</h3>
-            <span className="text-xs" style={{ color: 'var(--text-secondary, #6b7280)' }}>{words.length} words</span>
+            <span className="text-xs" style={{ color: 'var(--text-secondary, #6b7280)' }}>{words.length} {t('dash.words')}</span>
           </div>
           <button onClick={onClose}
             className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all duration-200"
@@ -63,7 +67,7 @@ function WordPopup({ title, accent, words, onClose }) {
         {/* Word list */}
         <div className="flex-1 overflow-auto px-4 py-3 space-y-2">
           {words.length === 0 ? (
-            <p className="text-center py-8 text-sm" style={{ color: 'var(--text-secondary, #6b7280)' }}>No words</p>
+            <p className="text-center py-8 text-sm" style={{ color: 'var(--text-secondary, #6b7280)' }}>{t('dash.noWords')}</p>
           ) : words.map(w => {
             const isExpanded = expandedId === w.id;
             return (
@@ -91,39 +95,39 @@ function WordPopup({ title, accent, words, onClose }) {
                   <div className="px-4 pb-4 pt-2 space-y-3" style={{ borderTop: '1px solid var(--neu-shadow-dark)' }}>
                     {w.definition && (
                       <div>
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition</p>
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{t('dash.definition')}</p>
                         <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary, #374151)' }}>{w.definition}</p>
                       </div>
                     )}
                     {w.definitionZh && (
                       <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">中文释义</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('dash.definitionZh')}</p>
                         <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary, #6b7280)' }}>{w.definitionZh}</p>
                       </div>
                     )}
                     {w.example && (
                       <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Example</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('dash.example')}</p>
                         <p className="text-sm italic leading-relaxed" style={{ color: 'var(--text-secondary, #6b7280)' }}>{w.example}</p>
                       </div>
                     )}
                     {w.notes && (
                       <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Notes</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('dash.notes')}</p>
                         <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary, #6b7280)' }}>{w.notes}</p>
                       </div>
                     )}
                     {(w.etymology || w.roots || w.memoryTip || w.relatedWords) && (
                       <div className="mt-2 pt-3 space-y-2" style={{ borderTop: '1px solid var(--neu-shadow-dark)' }}>
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-[10px] font-bold text-sky-600">Deep Learn</span>
-                          <span className="text-[9px] text-gray-400">— AI</span>
+                          <span className="text-[10px] font-bold text-sky-600">{t('dash.deepLearn')}</span>
+                          <span className="text-[9px] text-gray-400">{t('dash.ai')}</span>
                         </div>
                         {w.etymology && (
                           <div>
                             <div className="flex items-center gap-1 mb-0.5">
                               <span className="inline-block w-0.5 h-3 rounded-full bg-amber-400" />
-                              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">词源演变</span>
+                              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{t('dash.etymology')}</span>
                             </div>
                             <p className="text-sm leading-relaxed pl-2" style={{ color: 'var(--text-secondary, #6b7280)' }}>{w.etymology}</p>
                           </div>
@@ -132,7 +136,7 @@ function WordPopup({ title, accent, words, onClose }) {
                           <div>
                             <div className="flex items-center gap-1 mb-0.5">
                               <span className="inline-block w-0.5 h-3 rounded-full bg-sky-400" />
-                              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-widest">词根拆解</span>
+                              <span className="text-[10px] font-bold text-sky-600 uppercase tracking-widest">{t('dash.roots')}</span>
                             </div>
                             <p className="text-sm leading-relaxed pl-2" style={{ color: 'var(--text-secondary, #6b7280)' }}>{w.roots}</p>
                           </div>
@@ -141,7 +145,7 @@ function WordPopup({ title, accent, words, onClose }) {
                           <div>
                             <div className="flex items-center gap-1 mb-0.5">
                               <span className="inline-block w-0.5 h-3 rounded-full bg-violet-400" />
-                              <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest">记忆技巧</span>
+                              <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest">{t('dash.memoryTip')}</span>
                             </div>
                             <p className="text-sm leading-relaxed pl-2" style={{ color: 'var(--text-secondary, #6b7280)' }}>{w.memoryTip}</p>
                           </div>
@@ -150,7 +154,7 @@ function WordPopup({ title, accent, words, onClose }) {
                           <div>
                             <div className="flex items-center gap-1 mb-0.5">
                               <span className="inline-block w-0.5 h-3 rounded-full bg-emerald-400" />
-                              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">同根词汇</span>
+                              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{t('dash.relatedWords')}</span>
                             </div>
                             <div className="flex gap-1.5 flex-wrap pl-2">
                               {w.relatedWords.split(/[,，]/).map((rw, i) => (
@@ -173,11 +177,15 @@ function WordPopup({ title, accent, words, onClose }) {
 }
 
 export default function Dashboard({ onNav, visible }) {
+  const { t } = useLang();
+  const MASTERY = MASTERY_KEYS.map(k => t(k));
   const [stats, setStats] = useState(null);
   const [masteryCounts, setMasteryCounts] = useState(null);
   const [loadError, setLoadError] = useState(false);
-  const [greeting, setGreeting] = useState(getGreeting);
+  const [greeting, setGreeting] = useState(() => getGreeting(t));
   const [popup, setPopup] = useState(null);
+
+  useEffect(() => { setGreeting(getGreeting(t)); }, [t]);
 
   useEffect(() => {
     if (!visible) return;
@@ -204,13 +212,13 @@ export default function Dashboard({ onNav, visible }) {
   if (loadError) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4" style={{ background: 'var(--neu-bg)' }}>
       <p style={{ fontSize: 32 }}>⚠️</p>
-      <p style={{ color: '#6b7280', fontSize: 14 }}>Failed to load stats. Please restart the app.</p>
+      <p style={{ color: '#6b7280', fontSize: 14 }}>{t('dash.loadError')}</p>
     </div>
   );
 
   if (!stats) return (
     <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse" style={{ background: 'var(--neu-bg)' }}>
-      Loading...
+      {t('dash.loading')}
     </div>
   );
 
@@ -225,24 +233,24 @@ export default function Dashboard({ onNav, visible }) {
       <div className="flex-1 overflow-auto p-8 animate-fade-in">
         <div className="max-w-2xl">
         <h2 className="text-2xl font-bold text-gray-700 mb-1">{greeting}</h2>
-        <p className="text-sm text-gray-400 mb-8">Here's your learning overview.</p>
+        <p className="text-sm text-gray-400 mb-8">{t('dash.overview')}</p>
 
         {/* Stat cards */}
         <div className="grid grid-cols-5 gap-3 mb-8 stagger">
           {[
-            { label: 'Total', value: stats.total, accent: '#71717a',
+            { label: t('dash.total'), value: stats.total, accent: '#71717a',
               fetch: () => WordService.GetWordPage('date', 1, 200, '', 'all') },
-            { label: 'Mastered', value: stats.mastered, accent: '#10b981',
+            { label: t('dash.mastered'), value: stats.mastered, accent: '#10b981',
               fetch: () => Promise.all([WordService.GetWordPage('date', 1, 100, '', '4'), WordService.GetWordPage('date', 1, 100, '', '5')])
                 .then(([a, b]) => ({ words: [...(a?.words || []), ...(b?.words || [])] })) },
-            { label: 'Today', value: stats.today, accent: '#3b82f6',
+            { label: t('dash.today'), value: stats.today, accent: '#3b82f6',
               fetch: () => WordService.GetAllWords().then(ws => {
                 const today = new Date().toISOString().slice(0, 10);
                 return { words: ws.filter(w => w.createdAt && w.createdAt.startsWith(today)) };
               }) },
-            { label: 'AI Lookups', value: stats.aiCount, accent: '#8b5cf6',
+            { label: t('dash.aiLookups'), value: stats.aiCount, accent: '#8b5cf6',
               fetch: () => WordService.GetAllWords().then(ws => ({ words: ws.filter(w => w.phonetic) })) },
-            { label: '待复习', value: stats.needReview || 0, accent: '#f87171',
+            { label: t('dash.needReview'), value: stats.needReview || 0, accent: '#f87171',
               fetch: () => WordService.GetWordPage('ebbinghaus', 1, 200, '', 'all').then(data => {
                 const filtered = (data?.words || []).filter(w => computeUrgency(w.masteryLevel, w.lastReviewedAt) <= 1);
                 return { words: filtered };
@@ -262,7 +270,7 @@ export default function Dashboard({ onNav, visible }) {
         {/* Mastery distribution bar */}
         {masteryCounts && stats.total > 0 && (
           <div className="neu-card p-6 mb-6">
-            <h3 className="text-sm font-semibold text-gray-500 mb-4 uppercase tracking-wider">掌握度分布</h3>
+            <h3 className="text-sm font-semibold text-gray-500 mb-4 uppercase tracking-wider">{t('dash.masteryDist')}</h3>
             <div className="flex rounded-full overflow-hidden h-4 mb-3" style={{ background: 'var(--neu-bg-dark)' }}>
               {[0, 1, 2, 3, 4, 5].map(i => {
                 const count = masteryCounts[String(i)] || 0;
@@ -292,7 +300,7 @@ export default function Dashboard({ onNav, visible }) {
         {/* Learning progress per mastery level */}
         {masteryCounts && stats.total > 0 && (
           <div className="neu-card p-6 mb-6">
-            <h3 className="text-sm font-semibold text-gray-500 mb-5 uppercase tracking-wider">学习进度</h3>
+            <h3 className="text-sm font-semibold text-gray-500 mb-5 uppercase tracking-wider">{t('dash.progress')}</h3>
             <div className="space-y-3">
               {[0, 1, 2, 3, 4, 5].map(i => {
                 const count = masteryCounts[String(i)] || 0;
@@ -314,14 +322,14 @@ export default function Dashboard({ onNav, visible }) {
               {/* Divider */}
               <div className="pt-2 border-t" style={{ borderColor: 'var(--neu-shadow-dark)', opacity: 0.3 }}>
                 <div className="flex items-center gap-3 cursor-pointer group"
-                  onClick={() => openPopup('待复习', '#f87171',
+                  onClick={() => openPopup(t('dash.needReview'), '#f87171',
                     () => WordService.GetWordPage('ebbinghaus', 1, 200, '', 'all').then(data => {
                       const filtered = (data?.words || []).filter(w => computeUrgency(w.masteryLevel, w.lastReviewedAt) <= 1);
                       return { words: filtered };
                     }))}>
                   <div className="flex items-center gap-1.5 w-20 flex-shrink-0">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#f87171' }} />
-                    <span className="text-xs text-gray-500 font-semibold group-hover:text-gray-700 transition-colors">待复习</span>
+                    <span className="text-xs text-gray-500 font-semibold group-hover:text-gray-700 transition-colors">{t('dash.needReview')}</span>
                   </div>
                   <div className="flex-1 progress-track h-2.5">
                     <div className="progress-fill" style={{ width: `${needReviewPct}%`, background: 'linear-gradient(90deg, #f87171, #fb923c)', transition: 'width 0.3s ease' }} />
@@ -335,9 +343,9 @@ export default function Dashboard({ onNav, visible }) {
 
         {stats.total === 0 && (
           <div className="neu-card p-8 text-center">
-            <p className="text-gray-400 mb-5 font-medium">No words yet — start your vocabulary journey!</p>
+            <p className="text-gray-400 mb-5 font-medium">{t('dash.empty')}</p>
             <button onClick={() => onNav('add')} className="btn btn-primary">
-              Add Your First Word
+              {t('dash.addFirst')}
             </button>
           </div>
         )}

@@ -1,6 +1,11 @@
 import React from 'react'
+import { LangContext, translations } from '../i18n'
+
+const t = (lang, key) => translations[lang]?.[key] || translations.en[key] || key;
 
 class ErrorBoundary extends React.Component {
+  static contextType = LangContext;
+
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -16,6 +21,7 @@ class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const lang = this.context || 'en';
       return (
         <div style={{
           display: 'flex',
@@ -29,9 +35,9 @@ class ErrorBoundary extends React.Component {
           padding: 32,
         }}>
           <div style={{ fontSize: 48 }}>⚠️</div>
-          <h2 style={{ color: '#374151', margin: 0 }}>Something went wrong</h2>
+          <h2 style={{ color: '#374151', margin: 0 }}>{t(lang, 'eb.title')}</h2>
           <p style={{ color: '#6b7280', fontSize: 14, maxWidth: 400, textAlign: 'center' }}>
-            {this.state.error?.message || 'Unknown error'}
+            {this.state.error?.message || t(lang, 'eb.unknown')}
           </p>
           <button
             onClick={() => window.location.reload()}
@@ -45,7 +51,7 @@ class ErrorBoundary extends React.Component {
               fontWeight: 600,
             }}
           >
-            Reload
+            {t(lang, 'eb.reload')}
           </button>
         </div>
       );

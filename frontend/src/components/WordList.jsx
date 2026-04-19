@@ -2,17 +2,18 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
 import * as AIService from "../../bindings/ensher/aiservice";
 import { useAI } from '../App';
+import { useLang } from '../i18n';
 
-const MASTERY = ['New','Recognize','Familiar','Understand','Mastered','Expert'];
+const MASTERY_KEYS = ['mastery.0','mastery.1','mastery.2','mastery.3','mastery.4','mastery.5'];
 const MC = ['text-zinc-500','text-rose-500','text-orange-500','text-amber-500','text-emerald-600','text-amber-600'];
 const MB = ['badge-zinc','badge-rose','badge-amber','badge-amber','badge-emerald','badge-amber'];
 const MASTERY_COLORS = ['#71717a','#f43f5e','#f97316','#f59e0b','#10b981','#eab308'];
 const RETAIN_COLORS = ['var(--retain-1)','var(--retain-2)','var(--retain-3)','var(--retain-4)','var(--retain-5)','var(--retain-6)'];
 
-const SORTS = [
-  { id: 'ebbinghaus', label: '遗忘曲线' },
-  { id: 'date',       label: '新增日期' },
-  { id: 'alpha',      label: '字母排序' },
+const SORT_KEYS = [
+  { id: 'ebbinghaus', labelKey: 'wl.sort.ebbinghaus' },
+  { id: 'date',       labelKey: 'wl.sort.date' },
+  { id: 'alpha',      labelKey: 'wl.sort.alpha' },
 ];
 
 const PAGE_SIZE = 60;
@@ -31,6 +32,7 @@ function computeUrgency(mastery, lastReviewedAt) {
 
 // ─── Draggable Ebbinghaus curve (expanded detail view) ──────────────────
 const UrgencySlider = memo(function UrgencySlider({ wordId, urgency: storedUrgency, mastery, lastReviewedAt, onUrgencyChange }) {
+  const { t } = useLang();
   const displayUrgency = storedUrgency >= 0 ? storedUrgency : computeUrgency(mastery, lastReviewedAt);
   const [dragging, setDragging] = useState(false);
   const [value, setValue] = useState(displayUrgency);
@@ -95,7 +97,7 @@ const UrgencySlider = memo(function UrgencySlider({ wordId, urgency: storedUrgen
   const isAuto = storedUrgency < 0;
   const dotCx = X_MIN + daysT * (X_MAX - X_MIN);
   const dotCy = Y_MIN + (1 - urgencyT) * (Y_MAX - Y_MIN);
-  const URGENCY_LABELS = ['Critical', 'High', 'Medium', 'Low', 'Learned'];
+  const URGENCY_KEYS = ['urgency.0', 'urgency.1', 'urgency.2', 'urgency.3', 'urgency.4'];
 
   return (
     <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
@@ -121,7 +123,7 @@ const UrgencySlider = memo(function UrgencySlider({ wordId, urgency: storedUrgen
         <circle cx={dotCx} cy={dotCy} r={dragging ? 10 : 8} fill="none" stroke={dotColor} strokeWidth={0.8} opacity={0.35} />
       </svg>
       <div className="flex-shrink-0" style={{ minWidth: 44 }}>
-        <span className="text-[10px] font-bold" style={{ color: dotColor }}>{URGENCY_LABELS[value]}</span>
+        <span className="text-[10px] font-bold" style={{ color: dotColor }}>{t(URGENCY_KEYS[value])}</span>
         {isAuto && <span className="block text-[8px] text-gray-400 opacity-60">auto</span>}
       </div>
     </div>
@@ -162,6 +164,8 @@ function UrgencyDot({ mastery, lastReviewedAt, urgency }) {
 // ─── Memoized Word card ────────────────────────────────────────────────
 const Card = memo(function Card({ w, onDelete, onEdit, showRetention, onUrgencyChange, onAILearnChange, isExpanded, onToggle }) {
   const { aiEnabled } = useAI();
+  const { t } = useLang();
+  const MASTERY = MASTERY_KEYS.map(k => t(k));
   const hasCached = !!(w.etymology || w.roots || w.memoryTip || w.relatedWords);
   const [aiResult, setAiResult] = useState(hasCached ? { etymology: w.etymology, roots: w.roots, memoryTip: w.memoryTip, relatedWords: w.relatedWords } : null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -209,28 +213,28 @@ const Card = memo(function Card({ w, onDelete, onEdit, showRetention, onUrgencyC
         <div className="px-4 pb-4 pt-2 border-t border-gray-200/50">
           <div className="flex items-center gap-3 mb-3 py-2 px-3 rounded-lg" style={{ background: 'var(--neu-bg-dark)', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)' }}>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Urgency</span>
+              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{t('wl.urgency')}</span>
               <UrgencySlider wordId={w.id} urgency={w.urgency} mastery={w.masteryLevel} lastReviewedAt={w.lastReviewedAt} onUrgencyChange={onUrgencyChange} />
             </div>
             <div className="w-px h-4 bg-gray-300/30" />
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Level</span>
+              <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{t('wl.level')}</span>
               <span className={`badge ${MB[w.masteryLevel]} ${MC[w.masteryLevel]}`} style={{ fontSize: '10px', padding: '1px 6px' }}>{MASTERY[w.masteryLevel]}</span>
             </div>
           </div>
-          {w.definition && <div className="mb-3"><p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Definition (EN)</p><p className="text-sm text-gray-700 leading-relaxed">{w.definition}</p></div>}
-          {w.definitionZh && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">中文释义</p><p className="text-sm text-gray-500 leading-relaxed">{w.definitionZh}</p></div>}
-          {w.example && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Example</p><p className="text-sm text-gray-500 italic leading-relaxed">{w.example}</p></div>}
-          {w.notes && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Notes</p><p className="text-sm text-gray-500 leading-relaxed">{w.notes}</p></div>}
+          {w.definition && <div className="mb-3"><p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">{t('wl.definitionEn')}</p><p className="text-sm text-gray-700 leading-relaxed">{w.definition}</p></div>}
+          {w.definitionZh && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('wl.definitionZh')}</p><p className="text-sm text-gray-500 leading-relaxed">{w.definitionZh}</p></div>}
+          {w.example && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('wl.example')}</p><p className="text-sm text-gray-500 italic leading-relaxed">{w.example}</p></div>}
+          {w.notes && <div className="mb-3"><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('wl.notes')}</p><p className="text-sm text-gray-500 leading-relaxed">{w.notes}</p></div>}
           {w.tags && <div className="flex gap-1.5 flex-wrap mb-3">{w.tags.split(',').map((t, i) => (<span key={i} className="badge badge-sky text-sky-700">{t.trim()}</span>))}</div>}
 
           {/* Action buttons */}
           <div className="flex items-center gap-2">
-            <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); onDelete(w.id); }}>Delete</button>
-            {onEdit && <button className="btn btn-soft btn-sm" onClick={e => { e.stopPropagation(); onEdit(w); }}>Edit</button>}
+            <button className="btn btn-danger btn-sm" onClick={e => { e.stopPropagation(); onDelete(w.id); }}>{t('wl.delete')}</button>
+            {onEdit && <button className="btn btn-soft btn-sm" onClick={e => { e.stopPropagation(); onEdit(w); }}>{t('wl.edit')}</button>}
             {aiEnabled && (
               <button className="btn btn-secondary btn-sm ml-auto" onClick={handleAILearn} disabled={aiLoading}>
-                {aiLoading ? 'Analyzing...' : (hasCached ? '重新生成' : 'AI-Learn')}
+                {aiLoading ? t('wl.analyzing') : (hasCached ? t('wl.regenerate') : t('wl.aiLearn'))}
               </button>
             )}
           </div>
@@ -242,14 +246,14 @@ const Card = memo(function Card({ w, onDelete, onEdit, showRetention, onUrgencyC
           {aiResult && (
             <div className="mt-3 rounded-xl p-4 space-y-3" style={{ background: 'var(--neu-bg-dark)', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)' }}>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-bold text-sky-600">Deep Learn</span>
-                <span className="text-[10px] text-gray-400">— powered by AI</span>
+                <span className="text-sm font-bold text-sky-600">{t('wl.deepLearn')}</span>
+                <span className="text-[10px] text-gray-400">{t('wl.poweredByAI')}</span>
               </div>
               {aiResult.etymology && (
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="inline-block w-1 h-3 rounded-full bg-amber-400" />
-                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">词源演变</span>
+                    <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{t('wl.etymology')}</span>
                   </div>
                   <p className="text-sm text-gray-600 leading-relaxed pl-2.5">{aiResult.etymology}</p>
                 </div>
@@ -258,7 +262,7 @@ const Card = memo(function Card({ w, onDelete, onEdit, showRetention, onUrgencyC
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="inline-block w-1 h-3 rounded-full bg-sky-400" />
-                    <span className="text-[10px] font-bold text-sky-600 uppercase tracking-widest">词根拆解</span>
+                    <span className="text-[10px] font-bold text-sky-600 uppercase tracking-widest">{t('wl.roots')}</span>
                   </div>
                   <p className="text-sm text-gray-600 leading-relaxed pl-2.5">{aiResult.roots}</p>
                 </div>
@@ -267,7 +271,7 @@ const Card = memo(function Card({ w, onDelete, onEdit, showRetention, onUrgencyC
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="inline-block w-1 h-3 rounded-full bg-violet-400" />
-                    <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest">记忆技巧</span>
+                    <span className="text-[10px] font-bold text-violet-600 uppercase tracking-widest">{t('wl.memoryTip')}</span>
                   </div>
                   <p className="text-sm text-gray-600 leading-relaxed pl-2.5">{aiResult.memoryTip}</p>
                 </div>
@@ -276,7 +280,7 @@ const Card = memo(function Card({ w, onDelete, onEdit, showRetention, onUrgencyC
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="inline-block w-1 h-3 rounded-full bg-emerald-400" />
-                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">同根词汇</span>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{t('wl.relatedWords')}</span>
                   </div>
                   <div className="flex gap-1.5 flex-wrap pl-2.5">
                     {aiResult.relatedWords.split(/[,，]/).map((rw, i) => (
@@ -314,13 +318,17 @@ const DATE_TABS = [
   { id: 'Earlier',   label: 'Earlier' },
 ];
 
-const MASTERY_TABS = [
-  { id: 'all', label: 'All' },
-  ...MASTERY.map((label, i) => ({ id: String(i), label })),
+const MASTERY_TABS_KEYS = [
+  { id: 'all', labelKey: 'wl.date.all' },
+  ...MASTERY_KEYS.map((key, i) => ({ id: String(i), labelKey: key })),
 ];
 
 // ─── Main ───────────────────────────────────────────────────────────────
 export default function WordList({ onEditWord }) {
+  const { t } = useLang();
+  const MASTERY = MASTERY_KEYS.map(k => t(k));
+  const MASTERY_TABS = MASTERY_TABS_KEYS.map(tk => ({ id: tk.id, label: t(tk.labelKey) }));
+  const SORTS = SORT_KEYS.map(s => ({ id: s.id, label: t(s.labelKey) }));
   const [words, setWords] = useState([]);
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('ebbinghaus');
@@ -657,8 +665,8 @@ export default function WordList({ onEditWord }) {
           {/* Title row */}
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-2xl font-bold text-gray-700">My Words</h2>
-              <p className="text-sm text-gray-400">{totalCount} words{search.trim() ? ` — "${search.trim()}"` : ''}</p>
+              <h2 className="text-2xl font-bold text-gray-700">{t('wl.myWords')}</h2>
+              <p className="text-sm text-gray-400">{totalCount} {t('wl.words')}{search.trim() ? ` — "${search.trim()}"` : ''}</p>
             </div>
             <div className="flex items-center gap-3">
               <div className="neu-raised-sm p-1 flex gap-0.5">
@@ -671,7 +679,7 @@ export default function WordList({ onEditWord }) {
                 className="neu-input px-3.5 py-2 text-sm w-40"
                 style={{ paddingTop: 8, paddingBottom: 8 }}
                 value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search..."
+                placeholder={t('wl.search')}
               />
             </div>
           </div>
@@ -693,7 +701,7 @@ export default function WordList({ onEditWord }) {
                 {urgencyStats && urgencyStats.needReview > 0 && (
                   <span className="flex items-center gap-1 text-[10px] flex-shrink-0 px-2 py-0.5 rounded-full" style={{ background: 'rgba(248,113,113,0.12)' }}>
                     <span className="text-rose-500 font-bold">{urgencyStats.needReview}</span>
-                    <span className="text-rose-400">待复习</span>
+                    <span className="text-rose-400">{t('wl.needReview')}</span>
                   </span>
                 )}
               </div>
@@ -753,7 +761,7 @@ export default function WordList({ onEditWord }) {
           {/* Search hint */}
           {search.trim() && !initialLoading && words.length > 0 && (
             <p className="text-xs text-gray-400 mb-2 px-1">
-              共找到 <span className="font-semibold text-gray-500">{totalCount}</span> 个结果
+              {t('wl.foundResults')} <span className="font-semibold text-gray-500">{totalCount}</span> {t('wl.results')}
             </p>
           )}
         </div>
@@ -765,12 +773,12 @@ export default function WordList({ onEditWord }) {
 
           {/* Loading / Empty */}
           {initialLoading ? (
-            <div className="text-center py-20 text-gray-400 animate-pulse">Loading...</div>
+            <div className="text-center py-20 text-gray-400 animate-pulse">{t('wl.loading')}</div>
           ) : words.length === 0 ? (
             <div className="neu-card p-12 text-center">
               <p className="text-5xl mb-4">📖</p>
               <p className="text-gray-400 font-medium">
-                {search.trim() ? `No results for "${search.trim()}"` : 'No words yet'}
+                {search.trim() ? `${t('wl.noResults')} "${search.trim()}"` : t('wl.noWords')}
               </p>
             </div>
           ) : null}
@@ -842,7 +850,7 @@ export default function WordList({ onEditWord }) {
               <div className="space-y-2">
                 {dateFilteredWords.length === 0 ? (
                   <div className="neu-card p-8 text-center">
-                    <p className="text-gray-400 text-sm">No words in this period</p>
+                    <p className="text-gray-400 text-sm">{t('wl.noWordsPeriod')}</p>
                   </div>
                 ) : (
                   dateFilteredWords.map(w => (
@@ -866,7 +874,7 @@ export default function WordList({ onEditWord }) {
               {masteryFilteredWords.length === 0 ? (
                 <div className="neu-card p-8 text-center">
                   <p className="text-gray-400 text-sm">
-                    {masteryFilter === 'all' ? 'No words yet' : `No "${MASTERY[parseInt(masteryFilter)]}" words`}
+                    {masteryFilter === 'all' ? t('wl.noWords') : `${t('wl.noResults')} "${MASTERY[parseInt(masteryFilter)]}"`}
                   </p>
                 </div>
               ) : (
@@ -877,7 +885,7 @@ export default function WordList({ onEditWord }) {
                   {/* Infinite scroll trigger */}
                   {hasMore && (
                     <div ref={loaderRef} className="text-center py-6 text-gray-400 text-sm animate-pulse">
-                      Loading more...
+                      {t('wl.loadingMore')}
                     </div>
                   )}
                 </div>

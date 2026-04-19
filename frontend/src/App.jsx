@@ -1,4 +1,5 @@
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
+import { LangContext, useLang } from './i18n';
 import Dashboard from './components/Dashboard';
 import AddWord from './components/AddWord';
 import WordList from './components/WordList';
@@ -13,13 +14,13 @@ export const AIContext = createContext({ aiEnabled: true, setAiEnabled: () => {}
 
 const isWidget = new URLSearchParams(window.location.search).get('window') === 'widget';
 
-const NAV = [
-  { id: 'dashboard', label: 'Dashboard', icon: '◎' },
-  { id: 'add', label: 'Add Word', icon: '＋' },
-  { id: 'words', label: 'My Words', icon: '☰' },
-  { id: 'quiz', label: 'Review', icon: '↻' },
-  { id: 'daily-article', label: 'Daily Article', icon: '✎' },
-  { id: 'settings', label: 'Settings', icon: '⚙' },
+const NAV_KEYS = [
+  { id: 'dashboard', labelKey: 'nav.dashboard', icon: '◎' },
+  { id: 'add', labelKey: 'nav.addWord', icon: '＋' },
+  { id: 'words', labelKey: 'nav.myWords', icon: '☰' },
+  { id: 'quiz', labelKey: 'nav.review', icon: '↻' },
+  { id: 'daily-article', labelKey: 'nav.dailyArticle', icon: '✎' },
+  { id: 'settings', labelKey: 'nav.settings', icon: '⚙' },
 ];
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
   const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, word: null, wordCache: {} });
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
   const [skin, setSkin] = useState(() => localStorage.getItem('skin') || 'neumorphic');
+  const [lang, setLang] = useState(() => localStorage.getItem('lang') || 'en');
 
   // Apply theme to root element and persist
   useEffect(() => {
@@ -43,6 +45,11 @@ export default function App() {
     document.documentElement.setAttribute('data-skin', skin);
     localStorage.setItem('skin', skin);
   }, [skin]);
+
+  // Persist language
+  useEffect(() => {
+    localStorage.setItem('lang', lang);
+  }, [lang]);
 
   useEffect(() => {
     AIService.GetAISettings().then(s => {
@@ -110,9 +117,11 @@ export default function App() {
 
   if (isWidget) {
     return (
-      <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme, skin, setSkin }}>
-        <QuickLookupWidget />
-      </AIContext.Provider>
+      <LangContext.Provider value={lang}>
+        <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme, skin, setSkin, lang, setLang }}>
+          <QuickLookupWidget />
+        </AIContext.Provider>
+      </LangContext.Provider>
     );
   }
 
@@ -123,9 +132,12 @@ export default function App() {
     if (id === 'quiz' && !payload) setReviewWords(null);
   };
 
+  const { t } = useLang();
+
   return (
-    <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme, skin, setSkin }}>
-      <div className="flex h-screen app-bg">
+    <LangContext.Provider value={lang}>
+      <AIContext.Provider value={{ aiEnabled, setAiEnabled, editWord, setEditWord, theme, setTheme, skin, setSkin, lang, setLang }}>
+        <div className="flex h-screen app-bg">
         {/* Sidebar */}
         <nav className="w-52 neu-raised-sm m-3 mr-0 flex flex-col sidebar-drag overflow-hidden flex-shrink-0">
           <div className="px-5 pt-6 pb-6 sidebar-drag">
@@ -134,14 +146,14 @@ export default function App() {
                 <span className="text-sm font-bold">E</span>
               </button>
               <div>
-                <h1 className="text-base font-bold text-gray-700 tracking-tight leading-none">Ensher</h1>
-                <p className="text-[10px] text-gray-400 mt-0.5">Vocabulary Builder</p>
+                <h1 className="text-base font-bold text-gray-700 tracking-tight leading-none">{t('app.title')}</h1>
+                <p className="text-[10px] text-gray-400 mt-0.5">{t('app.subtitle')}</p>
               </div>
             </div>
           </div>
 
           <div className="flex-1 space-y-1.5 px-3 pb-2">
-            {NAV.map(item => (
+            {NAV_KEYS.map(item => (
               <button
                 key={item.id}
                 onClick={() => navigate(item.id)}
@@ -151,7 +163,7 @@ export default function App() {
                 style={{ justifyContent: 'flex-start' }}
               >
                 <span className="text-sm w-5 text-left opacity-60">{item.icon}</span>
-                <span className="text-left flex-1">{item.label}</span>
+                <span className="text-left flex-1">{t(item.labelKey)}</span>
               </button>
             ))}
           </div>
@@ -209,6 +221,7 @@ export default function App() {
         })()}
       </div>
     </AIContext.Provider>
+    </LangContext.Provider>
   );
 }
 

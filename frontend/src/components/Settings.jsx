@@ -3,6 +3,7 @@ import * as AIService from "../../bindings/ensher/aiservice";
 import * as WordService from "../../bindings/ensher/wordservice";
 import * as QuickLookup from "../../bindings/ensher/quicklookupservice";
 import { useAI } from '../App';
+import { useLang } from '../i18n';
 
 const PROVIDERS = [
   { id: 'minimax', label: 'MiniMax', endpoint: 'api.minimaxi.com', defaultModel: 'M2-her', placeholder: 'Bearer token...' },
@@ -104,13 +105,13 @@ function IconPalette() {
 }
 
 const SECTIONS = [
-  { id: 'features', label: '功能开关',  icon: <IconZap /> },
-  { id: 'model',    label: '模型配置',  icon: <IconBot /> },
-  { id: 'review',   label: '复习配置',  icon: <IconRepeat /> },
-  { id: 'lookup',   label: 'Quick Lookup', icon: <IconSearch /> },
-  { id: 'skin',     label: '皮肤',     icon: <IconPalette /> },
-  { id: 'data',     label: '导出',      icon: <IconDatabase /> },
-  { id: 'about',    label: '说明',      icon: <IconInfo /> },
+  { id: 'features', labelKey: 'st.features',  icon: <IconZap /> },
+  { id: 'model',    labelKey: 'st.model',     icon: <IconBot /> },
+  { id: 'review',   labelKey: 'st.review',    icon: <IconRepeat /> },
+  { id: 'lookup',   labelKey: 'st.lookup',    icon: <IconSearch /> },
+  { id: 'skin',     labelKey: 'st.skin',      icon: <IconPalette /> },
+  { id: 'data',     labelKey: 'st.data',      icon: <IconDatabase /> },
+  { id: 'about',    labelKey: 'st.about',     icon: <IconInfo /> },
 ];
 
 // ── Toggle pill ─────────────────────────────────────────────────────────────
@@ -128,23 +129,36 @@ function Toggle({ value, onChange }) {
 }
 
 // ── Section 1: Feature Toggles ─────────────────────────────────────────────
-function FeaturesPanel({ aiEnabled, setAiEnabled }) {
+function FeaturesPanel({ aiEnabled, setAiEnabled, lang, setLang }) {
+  const { t } = useLang();
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">应用全局开关</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('st.globalSwitches')}</p>
 
       <div className="neu-card p-4 space-y-5">
         {/* AI 功能 */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-gray-700">AI 功能</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">AIDO 智能填充 & 判断</p>
+            <p className="text-sm font-semibold text-gray-700">{t('st.aiFeature')}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">{t('st.aiDesc')}</p>
           </div>
           <Toggle value={aiEnabled} onChange={setAiEnabled} />
         </div>
 
+        {/* Language */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-700">{t('st.language')}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">{t('st.languageDesc')}</p>
+          </div>
+          <div className="flex gap-1.5">
+            <button onClick={() => setLang('en')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${lang === 'en' ? 'bg-emerald-500 text-white' : 'neu-pressed-sm text-gray-500 hover:bg-gray-100'}`}>{t('st.langEn')}</button>
+            <button onClick={() => setLang('zh')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${lang === 'zh' ? 'bg-emerald-500 text-white' : 'neu-pressed-sm text-gray-500 hover:bg-gray-100'}`}>{t('st.langZh')}</button>
+          </div>
+        </div>
+
         <p className="text-[10px] text-gray-400 leading-relaxed">
-          配色方案和皮肤风格请在「皮肤」页面配置。
+          {t('st.skinNote')}
         </p>
       </div>
     </div>
@@ -153,6 +167,7 @@ function FeaturesPanel({ aiEnabled, setAiEnabled }) {
 
 // ── Section 2: Model Config ────────────────────────────────────────────────
 function ModelPanel({ provider, setProvider, providers, setProviders, showKeys, setShowKeys }) {
+  const { t } = useLang();
   const updateProvider = (id, field, value) => {
     setProviders(prev => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   };
@@ -160,7 +175,7 @@ function ModelPanel({ provider, setProvider, providers, setProviders, showKeys, 
 
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">选择一个 AI 平台并填写配置</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('st.selectPlatform')}</p>
 
       {/* Provider tabs */}
       <div className="flex rounded-xl bg-gray-100 p-1 gap-0.5 mb-5">
@@ -193,7 +208,7 @@ function ModelPanel({ provider, setProvider, providers, setProviders, showKeys, 
             </div>
           </div>
           {providers[provider]?.apiKey && (
-            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">已配置</span>
+            <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">{t('st.configured')}</span>
           )}
         </div>
 
@@ -212,7 +227,7 @@ function ModelPanel({ provider, setProvider, providers, setProviders, showKeys, 
               onClick={() => setShowKeys(prev => ({ ...prev, [provider]: !prev[provider] }))}
               className="text-[11px] font-semibold text-gray-400 hover:text-gray-600 transition-colors ml-2 select-none"
             >
-              {showKeys[provider] ? '隐藏' : '显示'}
+              {showKeys[provider] ? t('st.hide') : t('st.show')}
             </button>
           </div>
         </div>
@@ -226,12 +241,12 @@ function ModelPanel({ provider, setProvider, providers, setProviders, showKeys, 
             placeholder={cur?.defaultModel}
             className="neu-pressed-sm w-full px-4 py-3 text-sm"
           />
-          <p className="text-[10px] text-gray-400 mt-1.5">默认：{cur?.defaultModel}</p>
+          <p className="text-[10px] text-gray-400 mt-1.5">{t('st.default')}{cur?.defaultModel}</p>
         </div>
 
         {/* Other providers */}
         <div className="pt-4 border-t border-gray-100">
-          <p className="text-[10px] text-gray-400 mb-2">其他平台</p>
+          <p className="text-[10px] text-gray-400 mb-2">{t('st.otherPlatforms')}</p>
           <div className="flex gap-2 flex-wrap">
             {PROVIDERS.filter(p => p.id !== provider).map(p => (
               <div key={p.id} className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-50 border border-gray-100">
@@ -251,15 +266,16 @@ function ModelPanel({ provider, setProvider, providers, setProviders, showKeys, 
 
 // ── Section 3: Review Config ───────────────────────────────────────────────
 function ReviewPanel({ dailyLimit, setDailyLimit }) {
+  const { t } = useLang();
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">控制每日复习行为</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('st.dailyLimit')}</p>
 
       <div className="neu-card p-5 space-y-5">
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-gray-700">每日复习上限</p>
-            <span className="badge badge-emerald text-emerald-700">{dailyLimit} 词</span>
+            <p className="text-sm font-semibold text-gray-700">{t('st.dailyLimit')}</p>
+            <span className="badge badge-emerald text-emerald-700">{dailyLimit} {t('st.words')}</span>
           </div>
           <input
             type="range" min="5" max="50" step="5" value={dailyLimit}
@@ -269,7 +285,7 @@ function ReviewPanel({ dailyLimit, setDailyLimit }) {
           <div className="flex justify-between text-[10px] text-gray-400 mt-1">
             <span>5</span><span>50</span>
           </div>
-          <p className="text-[11px] text-gray-400 mt-2">每次复习的单词数量，建议 15–30</p>
+          <p className="text-[11px] text-gray-400 mt-2">{t('st.limitHint')}</p>
         </div>
       </div>
     </div>
@@ -278,20 +294,21 @@ function ReviewPanel({ dailyLimit, setDailyLimit }) {
 
 // ── Section 4: Quick Lookup ────────────────────────────────────────────────
 function LookupPanel({ hotkey, setHotkey, hotkeyEnabled, setHotkeyEnabled }) {
+  const { t } = useLang();
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">全局快捷键呼出查词浮窗</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('st.hotkeyTitle')}</p>
 
       <div className="neu-card p-5 space-y-5">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-700">启用快捷键</p>
+          <p className="text-sm font-semibold text-gray-700">{t('st.enableHotkey')}</p>
           <Toggle value={hotkeyEnabled} onChange={setHotkeyEnabled} />
         </div>
 
         {hotkeyEnabled && (
           <>
             <div className="border-t border-gray-100 pt-4">
-              <p className="text-[11px] font-semibold text-gray-500 mb-2">快捷键</p>
+              <p className="text-[11px] font-semibold text-gray-500 mb-2">{t('st.hotkey')}</p>
               <div
                 tabIndex={0}
                 onKeyDown={e => {
@@ -313,16 +330,16 @@ function LookupPanel({ hotkey, setHotkey, hotkeyEnabled, setHotkeyEnabled }) {
                     <span className="inline-block px-2 py-1 rounded text-xs font-bold bg-gray-100 text-gray-600">{p}</span>
                     {i < hotkey.split('+').length - 1 && <span className="text-gray-400 mx-1 text-xs">+</span>}
                   </span>
-                )) : <span className="text-gray-400 text-xs">点击此处并按下组合键...</span>}
+                )) : <span className="text-gray-400 text-xs">{t('st.pressCombo')}</span>}
               </div>
-              <p className="text-[10px] text-gray-400 mt-1.5">必须包含 Command / Ctrl / Option + 另一个键</p>
+              <p className="text-[10px] text-gray-400 mt-1.5">{t('st.hotkeyHint')}</p>
             </div>
 
             <button
               onClick={() => QuickLookup.ShowWidget()}
               className="btn btn-soft w-full py-2.5 text-sm font-semibold"
             >
-              触发 Quick Lookup
+              {t('st.triggerLookup')}
             </button>
           </>
         )}
@@ -336,7 +353,7 @@ const SKINS = [
   {
     id: 'neumorphic',
     name: 'Neumorphic',
-    sub: '柔和拟物',
+    subKey: 'st.neumorphic',
     preview: {
       bg: 'linear-gradient(145deg, #e8edf5, #cdd5e0)',
       card: '#e8edf5',
@@ -348,7 +365,7 @@ const SKINS = [
   {
     id: 'newspaper',
     name: 'Newspaper',
-    sub: '报纸艺术',
+    subKey: 'st.newspaper',
     preview: {
       bg: 'linear-gradient(145deg, #f5f0e6, #e8e0cc)',
       card: '#faf5eb',
@@ -360,7 +377,7 @@ const SKINS = [
   {
     id: 'glass',
     name: 'Glass',
-    sub: '晶透磨砂',
+    subKey: 'st.glass',
     preview: {
       bg: 'linear-gradient(145deg, #a8c0ff, #c4b5fd, #e8d5f5, #fce4ec, #c9d6ff)',
       card: 'rgba(255,255,255,0.48)',
@@ -371,16 +388,17 @@ const SKINS = [
   },
 ];
 function SkinPanel({ theme, setTheme, skin, setSkin }) {
+  const { t } = useLang();
   const cur = SKINS.find(s => s.id === skin);
   return (
     <div className="space-y-5">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">选择应用外观风格与主题</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('st.skinHint')}</p>
 
       {/* ── Skin selection — top ── */}
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <p className="text-sm font-semibold text-gray-700">皮肤风格</p>
-          <span className="text-[10px] text-gray-400">· 选择整体视觉风格</span>
+          <p className="text-sm font-semibold text-gray-700">{t('st.skinStyle')}</p>
+          <span className="text-[10px] text-gray-400">· {t('st.skinHint')}</span>
         </div>
         <div className="grid grid-cols-3 gap-3">
           {SKINS.map(s => (
@@ -424,7 +442,7 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
               <span className={`text-xs font-bold transition-colors ${skin === s.id ? 'text-emerald-700' : 'text-gray-600'}`}>
                 {s.name}
               </span>
-              <span className="text-[10px] text-gray-400 mt-0.5">{s.sub}</span>
+              <span className="text-[10px] text-gray-400 mt-0.5">{t(s.subKey)}</span>
 
               {skin === s.id && (
                 <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-400 flex items-center justify-center shadow-sm">
@@ -441,13 +459,13 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
       {/* ── Theme toggle — below ── */}
       <div className="neu-card p-5">
         <div className="flex items-center gap-2 mb-4">
-          <p className="text-sm font-semibold text-gray-700">配色方案</p>
-          <span className="text-[10px] text-gray-400">· 浅色或深色</span>
+          <p className="text-sm font-semibold text-gray-700">{t('st.colorScheme')}</p>
+          <span className="text-[10px] text-gray-400">· {t('st.colorHint')}</span>
         </div>
         <div className="flex gap-3">
           {[
             {
-              id: 'light', label: '浅色', desc: '明亮清新',
+              id: 'light', labelKey: 'st.light', descKey: 'st.lightDesc',
               gradient: 'linear-gradient(135deg, #e8edf5, #cdd5e0)',
               icon: (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -464,7 +482,7 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
               ),
             },
             {
-              id: 'dark', label: '深色', desc: '柔和护眼',
+              id: 'dark', labelKey: 'st.dark', descKey: 'st.darkDesc',
               gradient: 'linear-gradient(135deg, #1e1e2e, #2a2a3c)',
               icon: (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -472,12 +490,12 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
                 </svg>
               ),
             },
-          ].map(t => (
+          ].map(th => (
             <button
-              key={t.id}
-              onClick={() => setTheme(t.id)}
+              key={th.id}
+              onClick={() => setTheme(th.id)}
               className={`flex-1 flex items-center gap-3 py-3.5 px-4 rounded-xl border-2 transition-all duration-300 ${
-                theme === t.id
+                theme === th.id
                   ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
                   : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
               }`}
@@ -485,16 +503,16 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border"
                 style={{
-                  background: t.gradient,
-                  borderColor: theme === t.id ? 'rgba(16,185,129,0.3)' : 'rgba(0,0,0,0.08)',
-                  color: t.id === 'dark' ? '#fbbf24' : '#f59e0b',
+                  background: th.gradient,
+                  borderColor: theme === th.id ? 'rgba(16,185,129,0.3)' : 'rgba(0,0,0,0.08)',
+                  color: th.id === 'dark' ? '#fbbf24' : '#f59e0b',
                 }}
               >
-                {t.icon}
+                {th.icon}
               </div>
               <div className="text-left">
-                <p className={`text-xs font-bold ${theme === t.id ? 'text-emerald-700' : 'text-gray-500'}`}>{t.label}</p>
-                <p className="text-[10px] text-gray-400">{t.desc}</p>
+                <p className={`text-xs font-bold ${theme === th.id ? 'text-emerald-700' : 'text-gray-500'}`}>{th.labelKey ? t(th.labelKey) : ''}</p>
+                <p className="text-[10px] text-gray-400">{th.descKey ? t(th.descKey) : ''}</p>
               </div>
             </button>
           ))}
@@ -504,8 +522,8 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
       {/* ── Live preview ── */}
       <div className="neu-card overflow-hidden">
         <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-500">实时预览</p>
-          <span className="text-[10px] text-gray-400">{cur?.name} · {theme === 'light' ? '浅色' : '深色'}</span>
+          <p className="text-xs font-semibold text-gray-500">{t('st.livePreview')}</p>
+          <span className="text-[10px] text-gray-400">{cur?.name} · {theme === 'light' ? t('st.light') : t('st.dark')}</span>
         </div>
         <div
           className="mx-4 mb-4 rounded-xl p-4 relative overflow-hidden"
@@ -525,7 +543,7 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
             <p className="text-sm font-bold text-gray-700 mb-1" style={{ fontFamily: skin === 'newspaper' ? 'Georgia, serif' : 'inherit' }}>
               Ensher
             </p>
-            <p className="text-[10px] text-gray-400 mb-2.5">每日一词 · 积少成多</p>
+            <p className="text-[10px] text-gray-400 mb-2.5">{t('st.previewMotto')}</p>
             <div className="flex gap-1.5">
               <div className="h-5 px-2.5 rounded-md flex items-center" style={{ background: cur?.preview.accent, opacity: 0.9 }}>
                 <span className="text-[9px] font-bold text-white">Review</span>
@@ -547,9 +565,10 @@ function SkinPanel({ theme, setTheme, skin, setSkin }) {
 
 // ── Section 6: Data ────────────────────────────────────────────────────────
 function DataPanel({ msg, setMsg, ioWorking, setIoWorking }) {
+  const { t } = useLang();
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">导入导出你的单词数据</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('st.exportData')}</p>
 
       <div className="neu-card p-5 space-y-4">
         <div className="flex gap-3">
@@ -559,17 +578,17 @@ function DataPanel({ msg, setMsg, ioWorking, setIoWorking }) {
               setMsg(null);
               try {
                 const path = await WordService.ExportWords();
-                setMsg({ type: 'ok', text: path ? `已导出至 ${path}` : '已取消' });
+                setMsg({ type: 'ok', text: path ? `${t('st.exportedTo')} ${path}` : t('da.cancelled') });
                 setTimeout(() => setMsg(null), 3500);
               } catch (err) {
-                setMsg({ type: 'err', text: '导出失败：' + err.message });
+                setMsg({ type: 'err', text: t('st.exportFailed') + err.message });
               }
               setIoWorking(false);
             }}
             disabled={ioWorking}
             className="btn btn-soft flex-1 py-3 text-sm font-semibold"
           >
-            导出 JSON
+            {t('st.exportJson')}
           </button>
           <button
             onClick={async () => {
@@ -577,20 +596,20 @@ function DataPanel({ msg, setMsg, ioWorking, setIoWorking }) {
               setMsg(null);
               try {
                 const count = await WordService.ImportWords();
-                setMsg({ type: 'ok', text: count > 0 ? `已导入 ${count} 个单词` : '已取消或为空' });
+                setMsg({ type: 'ok', text: count > 0 ? `${t('st.imported')} ${count} ${t('st.words')}` : t('st.cancelledOrEmpty') });
                 setTimeout(() => setMsg(null), 3500);
               } catch (err) {
-                setMsg({ type: 'err', text: '导入失败：' + err.message });
+                setMsg({ type: 'err', text: t('st.importFailed') + err.message });
               }
               setIoWorking(false);
             }}
             disabled={ioWorking}
             className="btn btn-soft flex-1 py-3 text-sm font-semibold"
           >
-            导入 JSON
+            {t('st.importJson')}
           </button>
         </div>
-        <p className="text-[11px] text-gray-400">导出保存为 JSON 文件；导入读取并追加单词。</p>
+        <p className="text-[11px] text-gray-400">{t('st.dataDesc')}</p>
 
         {msg && (
           <p className={`text-sm font-semibold ${msg.type === 'ok' ? 'text-emerald-500' : 'text-rose-500'}`}>
@@ -604,9 +623,10 @@ function DataPanel({ msg, setMsg, ioWorking, setIoWorking }) {
 
 // ── Section 6: About ───────────────────────────────────────────────────────
 function AboutPanel() {
+  const { t } = useLang();
   return (
     <div className="space-y-1">
-      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">平台说明与隐私</p>
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">{t('st.platformPrivacy')}</p>
 
       <div className="neu-card p-5 space-y-4">
         {[
@@ -625,8 +645,8 @@ function AboutPanel() {
         <div className="flex items-start gap-3">
           <div className="w-px self-stretch bg-gradient-to-b from-transparent via-amber-300 to-transparent opacity-60 flex-shrink-0" />
           <div className="text-xs text-gray-500 leading-relaxed space-y-2">
-            <p>API Keys are stored locally at <code className="text-[10px] bg-gray-100 px-1 py-0.5 rounded">~/.ensher/settings.json</code> — never transmitted except to your chosen AI provider.</p>
-            <p>All data stays on your device. No telemetry or third-party tracking.</p>
+            <p>{t('st.privacy1')} <code className="text-[10px] bg-gray-100 px-1 py-0.5 rounded">~/.ensher/settings.json</code> {t('st.privacy2')}</p>
+            <p>{t('st.privacy3')}</p>
           </div>
         </div>
       </div>
@@ -636,7 +656,8 @@ function AboutPanel() {
 
 // ── Main ───────────────────────────────────────────────────────────────────
 export default function Settings({ aiEnabled, setAiEnabled }) {
-  const { theme, setTheme, skin, setSkin } = useAI();
+  const { theme, setTheme, skin, setSkin, lang, setLang } = useAI();
+  const { t } = useLang();
   const [section, setSection] = useState('features');
   const [provider, setProvider] = useState('minimax');
   const [providers, setProviders] = useState(DEFAULT_PROVIDERS_CONFIG());
@@ -685,7 +706,7 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
       }
       await AIService.SaveAISettings(provider, providersOut, aiEnabled);
       await WordService.SaveReviewSettings(dailyLimit);
-      setMsg({ type: 'ok', text: 'Settings saved!' });
+      setMsg({ type: 'ok', text: t('st.settingsSaved') });
       setTimeout(() => setMsg(null), 2500);
     } catch (err) {
       setMsg({ type: 'err', text: err.toString() });
@@ -697,7 +718,7 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
     <div className="flex-1 flex overflow-hidden animate-fade-in">
       {/* ── Left Sidebar ─────────────────────────── */}
       <div className="w-44 flex-shrink-0 flex flex-col py-8 px-4 gap-1">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2">Settings</p>
+        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2">{t('st.settings')}</p>
         {SECTIONS.map(s => (
           <button
             key={s.id}
@@ -709,7 +730,7 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
             }`}
           >
             <span className="text-base leading-none">{s.icon}</span>
-            <span>{s.label}</span>
+            <span>{t(s.labelKey)}</span>
           </button>
         ))}
       </div>
@@ -723,7 +744,7 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
       <div className="flex-1 overflow-auto px-8 py-8">
         <div className="max-w-lg">
           {section === 'features' && (
-            <FeaturesPanel aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} />
+            <FeaturesPanel aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} lang={lang} setLang={setLang} />
           )}
           {section === 'model' && (
             <ModelPanel
@@ -758,7 +779,7 @@ export default function Settings({ aiEnabled, setAiEnabled }) {
                 </p>
               )}
               <button onClick={handleSave} disabled={saving} className="btn btn-primary w-full py-3.5 mt-5">
-                {saving ? 'Saving...' : 'Save Settings'}
+                {saving ? t('st.saving') : t('st.saveSettings')}
               </button>
             </>
           )}

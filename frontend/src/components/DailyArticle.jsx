@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as ArticleService from "../../bindings/ensher/articleservice";
+import { useLang } from '../i18n';
 
 const TOPICS = ['All', 'General', 'Technology', 'Science', 'Daily Life', 'Travel', 'Food', 'Business', 'Nature', 'Health', 'Education', 'Entertainment', 'Culture', 'Sports', 'History'];
 const PAGE_SIZE = 15;
 
 export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = true, onReview }) {
+  const { t, lang } = useLang();
   const [articles, setArticles] = useState([]);
   const [allDates, setAllDates] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -134,7 +136,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
         setSelectedArticle(article);
       }
     } catch(e) {
-      setGeneratingError(e.message || '生成失败，请重试');
+      setGeneratingError(e.message || t('da.genFailed'));
     }
     setGenerating(false);
   };
@@ -187,7 +189,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
             }}
             onMouseEnter={(e) => handleWordHover(e, part)}
             onMouseLeave={handleWordLeave}
-            title={isSelected ? '已选中，点击取消' : '点击选中'}
+            title={isSelected ? t('da.selected') : t('da.clickSelect')}
           >
             {part}
           </span>
@@ -256,15 +258,16 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
     }
   };
 
+  const locale = lang === 'zh' ? 'zh-CN' : 'en-US';
   const monthLabel = (ym) => {
     const [y, m] = ym.split('-');
     const d = new Date(parseInt(y), parseInt(m) - 1);
-    return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return d.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
   };
 
   const dayLabel = (dateStr) => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   };
 
   // Article date label
@@ -289,7 +292,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
   if (loading && articles.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400 animate-pulse">
-        Loading articles...
+        {t('da.loadingArticles')}
       </div>
     );
   }
@@ -313,7 +316,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
             onClick={() => setSelectedArticle(null)}
             className="btn btn-soft btn-sm mb-4 flex items-center gap-2"
           >
-            <span>←</span> Back to Articles
+            <span>←</span> {t('da.backToArticles')}
           </button>
 
           {/* Article card */}
@@ -330,9 +333,9 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               <button
                 onClick={() => setDeleteId(selectedArticle.id)}
                 className="ml-2 text-gray-300 hover:text-rose-500 transition-colors text-xs flex-shrink-0"
-                title="Delete article"
+                title={t('da.deleteArticle')}
               >
-                ✕ Delete
+                {t('da.delete')}
               </button>
             </div>
 
@@ -342,7 +345,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                 onClick={() => setShowZh(!showZh)}
                 className={`btn btn-sm text-xs ${showZh ? 'btn-primary' : 'btn-soft'}`}
               >
-                {showZh ? '◉' : '○'} 中英对照
+                {showZh ? '◉' : '○'} {t('da.bilingual')}
               </button>
               {wordList.length > 0 && (
                 <>
@@ -350,14 +353,14 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                     onClick={handleSelectAll}
                     className="btn btn-sm btn-soft text-xs"
                   >
-                    {selectedWords.length === wordList.length ? '取消全选' : '全选'}
+                    {selectedWords.length === wordList.length ? t('da.deselectAll') : t('da.selectAll')}
                   </button>
                   <button
                     onClick={handleReview}
                     disabled={selectedWords.length === 0}
                     className={`btn btn-sm text-xs flex items-center gap-1.5 ${selectedWords.length > 0 ? 'btn-primary' : 'btn-soft opacity-50 cursor-not-allowed'}`}
                   >
-                    <span>↻</span> 复习 {selectedWords.length > 0 && `(${selectedWords.length})`}
+                    <span>↻</span> {t('da.review')} {selectedWords.length > 0 && `(${selectedWords.length})`}
                   </button>
                 </>
               )}
@@ -375,7 +378,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
             {wordList.length > 0 && (
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-                  Related Words ({wordList.length})
+                  {t('da.relatedWords')} ({wordList.length})
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {wordList.map((w, i) => (
@@ -397,19 +400,19 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
           {deleteId && (
             <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
               <div className="neu-card p-6 w-72 text-center">
-                <p className="text-sm font-semibold text-gray-700 mb-4">Delete this article?</p>
+                <p className="text-sm font-semibold text-gray-700 mb-4">{t('da.deleteConfirm')}</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setDeleteId(null)}
                     className="btn btn-soft flex-1 py-2 text-sm"
                   >
-                    Cancel
+                    {t('da.cancel')}
                   </button>
                   <button
                     onClick={() => handleDelete(deleteId)}
                     className="btn flex-1 py-2 text-sm bg-rose-500 text-white hover:bg-rose-600"
                   >
-                    Delete
+                    {t('wl.delete')}
                   </button>
                 </div>
               </div>
@@ -433,19 +436,19 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
       {deleteId && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="neu-card p-6 w-72 text-center">
-            <p className="text-sm font-semibold text-gray-700 mb-4">Delete this article?</p>
+            <p className="text-sm font-semibold text-gray-700 mb-4">{t('da.deleteConfirm')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteId(null)}
                 className="btn btn-soft flex-1 py-2 text-sm"
               >
-                Cancel
+                {t('da.cancel')}
               </button>
               <button
                 onClick={() => handleDelete(deleteId)}
                 className="btn flex-1 py-2 text-sm bg-rose-500 text-white hover:bg-rose-600"
               >
-                Delete
+                {t('wl.delete')}
               </button>
             </div>
           </div>
@@ -456,9 +459,9 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
       {generatingModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="neu-card p-6 w-80 space-y-4">
-            <h3 className="text-base font-bold text-gray-700">生成选项</h3>
+            <h3 className="text-base font-bold text-gray-700">{t('da.genOptions')}</h3>
             <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">单词数量</p>
+              <p className="text-xs font-semibold text-gray-500 mb-2">{t('da.wordCount')}</p>
               <div className="flex gap-2 flex-wrap">
                 {[10, 20, 30, 40].map(n => (
                   <button
@@ -466,16 +469,16 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                     onClick={() => setGenWordCount(n)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${genWordCount === n ? 'bg-emerald-500 text-white' : 'neu-pressed-sm text-gray-600 hover:bg-gray-100'}`}
                   >
-                    {n} 词
+                    {n} {t('da.words')}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">文章主题</p>
+              <p className="text-xs font-semibold text-gray-500 mb-2">{t('da.articleTopic')}</p>
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { value: '', label: '随机' },
+                  { value: '', label: t('da.random') },
                   { value: 'Technology', label: 'Technology' },
                   { value: 'Science', label: 'Science' },
                   { value: 'Daily Life', label: 'Daily Life' },
@@ -484,25 +487,25 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                   { value: 'Education', label: 'Education' },
                   { value: 'Travel', label: 'Travel' },
                   { value: 'Nature', label: 'Nature' },
-                ].map(t => (
+                ].map(tp => (
                   <button
-                    key={t.value}
-                    onClick={() => setGenTopic(t.value)}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors ${genTopic === t.value ? 'bg-emerald-500 text-white' : 'neu-pressed-sm text-gray-600 hover:bg-gray-100'}`}
+                    key={tp.value}
+                    onClick={() => setGenTopic(tp.value)}
+                    className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors ${genTopic === tp.value ? 'bg-emerald-500 text-white' : 'neu-pressed-sm text-gray-600 hover:bg-gray-100'}`}
                   >
-                    {t.label}
+                    {tp.label}
                   </button>
                 ))}
               </div>
             </div>
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setGeneratingModal(false)} className="btn btn-soft flex-1 py-2 text-sm">取消</button>
+              <button onClick={() => setGeneratingModal(false)} className="btn btn-soft flex-1 py-2 text-sm">{t('da.cancel')}</button>
               <button
                 onClick={handleGenerate}
                 disabled={generating || !aiEnabled}
                 className={`btn btn-primary flex-1 py-2 text-sm ${!aiEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {generating ? '⟳ 生成中...' : '✨ 开始生成'}
+                {generating ? t('da.generating') : t('da.startGen')}
               </button>
             </div>
           </div>
@@ -513,21 +516,21 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
       <div className="px-6 pt-6 pb-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-bold text-gray-700">Daily Article</h2>
+            <h2 className="text-lg font-bold text-gray-700">{t('da.dailyArticle')}</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              {total > 0 ? `${total} article${total !== 1 ? 's' : ''}` : 'Learn English through AI-generated articles'}
+              {total > 0 ? `${total} ${t(total !== 1 ? 'da.articlesPlural' : 'da.articles')}` : t('da.learnEnglish')}
             </p>
           </div>
           <button
             onClick={() => setGeneratingModal(true)}
             disabled={generating || !aiEnabled}
             className={`btn btn-primary btn-sm flex items-center gap-2 ${generating || !aiEnabled ? 'opacity-70' : ''}`}
-            title={!aiEnabled ? 'AI 功能已关闭，请在设置中开启' : ''}
+            title={!aiEnabled ? t('da.aiOffTooltip') : ''}
           >
             {generating ? (
-              <><span className="animate-spin-slow text-sm">⟳</span> Generating...</>
+              <><span className="animate-spin-slow text-sm">⟳</span> {t('da.generatingEllipsis')}</>
             ) : (
-              <><span>✨</span> Generate</>
+              <><span>✨</span> {t('da.generate')}</>
             )}
           </button>
         </div>
@@ -540,7 +543,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
         )}
         {!aiEnabled && (
           <div className="neu-pressed-sm p-3 mb-4 text-sm text-amber-600">
-            AI 功能已关闭，请在「设置」中开启后使用文章生成
+            {t('da.aiOffMsg')}
           </div>
         )}
 
@@ -551,7 +554,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search articles..."
+              placeholder={t('da.searchArticles')}
               className="neu-input w-full px-4 py-2.5 pl-9 text-sm"
             />
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
@@ -570,8 +573,8 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
             className="neu-input px-3 py-2.5 text-sm text-gray-600 cursor-pointer"
             style={{ minWidth: 130 }}
           >
-            {TOPICS.map(t => (
-              <option key={t} value={t}>{t}</option>
+            {TOPICS.map(tp => (
+              <option key={tp} value={tp}>{tp}</option>
             ))}
           </select>
         </div>
@@ -582,7 +585,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
         {/* Timeline sidebar */}
         {allDates.length > 0 && (
           <div className="w-36 flex-shrink-0 px-4 pb-4 overflow-y-auto border-r border-gray-200/50">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Timeline</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">{t('da.timeline')}</p>
             <div className="space-y-4">
               {Object.entries(groupedDates).map(([month, dates]) => (
                 <div key={month}>
@@ -617,7 +620,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                 onClick={() => setSelectedDate(null)}
                 className="text-[10px] text-gray-400 hover:text-gray-600 mt-3 px-1"
               >
-                ✕ Clear filter
+                {t('da.clearFilter')}
               </button>
             )}
           </div>
@@ -628,11 +631,11 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
           {articles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <p className="text-5xl mb-3">📝</p>
-              <p className="text-sm font-bold text-gray-600 mb-1">No articles found</p>
+              <p className="text-sm font-bold text-gray-600 mb-1">{t('da.noArticles')}</p>
               <p className="text-xs text-gray-400">
                 {searchQuery || topicFilter !== 'All' || selectedDate
-                  ? 'Try adjusting your filters'
-                  : 'Ready to generate your first article!'
+                  ? t('da.tryFilters')
+                  : t('da.firstArticle')
                 }
               </p>
             </div>
@@ -646,7 +649,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                 >
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="text-sm font-bold text-gray-800 leading-tight flex-1 pr-3 article-title">
-                      {article.title || 'Untitled'}
+                      {article.title || t('da.untitled')}
                     </h3>
                     <span className={`badge ${topicBadgeClass(article.topic)} flex-shrink-0`}>
                       {article.topic}
@@ -654,7 +657,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleteId(article.id); }}
                       className="ml-2 text-gray-300 hover:text-rose-500 transition-colors text-xs flex-shrink-0"
-                      title="Delete article"
+                      title={t('da.deleteArticle')}
                     >
                       ✕
                     </button>
@@ -669,7 +672,7 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
                     try { wordList = JSON.parse(article.wordTexts || '[]'); } catch {}
                     return wordList.length > 0 && (
                       <p className="text-[10px] text-emerald-600 mt-2 font-medium">
-                        ✦ {wordList.length} vocabulary words highlighted
+                        ✦ {wordList.length} {t('da.vocabHighlighted')}
                       </p>
                     );
                   })()}
@@ -679,12 +682,12 @@ export default function DailyArticle({ showTooltip, hideTooltip, aiEnabled = tru
               {/* Load more indicator */}
               {loadingMore && (
                 <div className="flex items-center justify-center py-4">
-                  <span className="text-gray-400 text-sm animate-pulse">Loading more...</span>
+                  <span className="text-gray-400 text-sm animate-pulse">{t('da.loadingMore')}</span>
                 </div>
               )}
               {!hasMore && articles.length > 0 && (
                 <p className="text-center text-xs text-gray-400 py-4">
-                  {total > articles.length ? '— All articles loaded —' : '— No more articles —'}
+                  {total > articles.length ? t('da.allLoaded') : t('da.noMore')}
                 </p>
               )}
             </div>

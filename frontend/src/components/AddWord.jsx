@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import * as WordService from "../../bindings/ensher/wordservice";
 import * as AIService from "../../bindings/ensher/aiservice";
 import { useAI } from '../App';
+import { useLang } from '../i18n';
 
 const isChinese = (str) => /[\u4e00-\u9fff]/.test(str);
 
 export default function AddWord({ onAdded }) {
   const { aiEnabled, editWord, setEditWord } = useAI();
+  const { t } = useLang();
   const [form, setForm] = useState({ word: '', phonetic: '', definition: '', definitionZh: '', example: '', notes: '', tags: '' });
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -75,7 +77,7 @@ export default function AddWord({ onAdded }) {
   // confirmState: { word, onConfirm: () => void } | null
 
   const handleAI = async () => {
-    if (!form.word.trim()) { setAiError('请先输入单词'); return; }
+    if (!form.word.trim()) { setAiError(t('aw.enterWord')); return; }
     setAiError(null);
 
     const existing = await checkExisting(form.word);
@@ -156,7 +158,7 @@ export default function AddWord({ onAdded }) {
               form.phonetic.trim(), form.definition.trim(),
               form.definitionZh.trim(), form.example.trim(), form.notes.trim(), form.tags.trim()
             );
-            setMsg({ type: 'ok', text: `"${form.word}" updated!` });
+            setMsg({ type: 'ok', text: `"${form.word}" ${t('aw.updated')}` });
             resetForm();
             setTimeout(() => setMsg(null), 2500);
             if (onAdded) onAdded();
@@ -167,7 +169,7 @@ export default function AddWord({ onAdded }) {
       return;
     }
 
-    // New word or already in edit mode — save directly
+    // Direct save (new word or editing existing)
     setSaving(true);
     try {
       if (existingId) {
@@ -176,13 +178,13 @@ export default function AddWord({ onAdded }) {
           form.phonetic.trim(), form.definition.trim(),
           form.definitionZh.trim(), form.example.trim(), form.notes.trim(), form.tags.trim()
         );
-        setMsg({ type: 'ok', text: `"${form.word}" updated!` });
+        setMsg({ type: 'ok', text: `"${form.word}" ${t('aw.updated')}` });
       } else {
         await WordService.AddWord(
           form.word.trim(), form.phonetic.trim(), form.definition.trim(),
           form.definitionZh.trim(), form.example.trim(), form.notes.trim(), form.tags.trim()
         );
-        setMsg({ type: 'ok', text: `"${form.word}" saved!` });
+        setMsg({ type: 'ok', text: `"${form.word}" ${t('aw.saved')}` });
       }
       resetForm();
       setTimeout(() => setMsg(null), 2500);
@@ -207,12 +209,12 @@ export default function AddWord({ onAdded }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-700">{isEditing ? 'Edit Word' : 'Add New Word'}</h2>
-            <p className="text-sm text-gray-400">{isEditing ? 'Update word details' : 'Record a new vocabulary word.'}</p>
+            <h2 className="text-2xl font-bold text-gray-700">{isEditing ? t('aw.editWord') : t('aw.addNewWord')}</h2>
+            <p className="text-sm text-gray-400">{isEditing ? t('aw.updateDetails') : t('aw.recordNew')}</p>
           </div>
           <div className="flex gap-2">
             {isEditing && (
-              <button onClick={resetForm} className="btn btn-soft px-4 py-2 text-sm">Cancel</button>
+              <button onClick={resetForm} className="btn btn-soft px-4 py-2 text-sm">{t('aw.cancel')}</button>
             )}
             <button
               onClick={handleSubmit}
@@ -220,9 +222,9 @@ export default function AddWord({ onAdded }) {
               className="btn btn-primary px-5 py-2.5 flex items-center gap-2"
             >
               {saving ? (
-                <><span className="animate-spin-slow">⟳</span> Saving...</>
+                <><span className="animate-spin-slow">⟳</span> {t('aw.saving')}</>
               ) : (
-                <><span className="text-base leading-none">{isEditing ? '↻' : '+'}</span> {isEditing ? 'Update' : 'Save'}</>
+                <><span className="text-base leading-none">{isEditing ? '↻' : '+'}</span> {isEditing ? t('aw.update') : t('aw.save')}</>
               )}
             </button>
           </div>
@@ -234,7 +236,7 @@ export default function AddWord({ onAdded }) {
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <span className="text-amber-500 flex-shrink-0">⚠️</span>
               <p className="text-sm text-amber-700 font-medium truncate">
-                "<span className="font-semibold">{confirmState.word}</span>" already exists — update it?
+                "<span className="font-semibold">{confirmState.word}</span>" {t('aw.exists')}
               </p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
@@ -242,13 +244,13 @@ export default function AddWord({ onAdded }) {
                 onClick={() => setConfirmState(null)}
                 className="btn btn-soft px-3 py-1.5 text-xs"
               >
-                Cancel
+                {t('aw.cancel')}
               </button>
               <button
                 onClick={confirmState.onConfirm}
                 className="btn btn-primary px-3 py-1.5 text-xs"
               >
-                Update
+                {t('aw.update')}
               </button>
             </div>
           </div>
@@ -257,7 +259,7 @@ export default function AddWord({ onAdded }) {
         {/* Word + AIDO row */}
         <div className="neu-card p-5 space-y-4 mb-4">
           <div>
-            <label className={labelCls}>Word <span className="text-emerald-500">*</span></label>
+            <label className={labelCls}>{t('aw.word')} <span className="text-emerald-500">*</span></label>
             <div className="flex gap-3">
               <input
                 className="neu-input flex-1 px-4 py-3 text-sm"
@@ -266,7 +268,7 @@ export default function AddWord({ onAdded }) {
                 onChange={set('word')}
                 onBlur={handleWordBlur}
                 onKeyDown={aiEnabled ? handleWordKeyDown : undefined}
-                placeholder="e.g. ephemeral"
+                placeholder={t('aw.egWord')}
                 autoFocus
                 readOnly={!!editWord}
                 disabled={!!editWord}
@@ -290,10 +292,10 @@ export default function AddWord({ onAdded }) {
               aiError ? (
                 <p className="mt-2 text-xs text-rose-500 font-medium">{aiError}</p>
               ) : form.word.trim() ? (
-                <p className="mt-2 text-xs text-gray-400">按 Enter 或点击 AIDO 自动填充</p>
+                <p className="mt-2 text-xs text-gray-400">{t('aw.enterOrAIDO')}</p>
               ) : null
             ) : (
-              <p className="mt-2 text-xs text-gray-400">AI 功能已关闭，请在 Settings 中开启</p>
+              <p className="mt-2 text-xs text-gray-400">{t('aw.aiOff')}</p>
             )}
           </div>
         </div>
@@ -302,39 +304,39 @@ export default function AddWord({ onAdded }) {
         <div className="neu-card p-5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Phonetic</label>
+              <label className={labelCls}>{t('aw.phonetic')}</label>
               <input className="neu-input w-full px-4 py-2.5 text-sm"
                 value={form.phonetic} onChange={set('phonetic')} placeholder="/ɪˈfɛm.ər.əl/" />
             </div>
             <div>
-              <label className={labelCls}>Tags</label>
+              <label className={labelCls}>{t('aw.tags')}</label>
               <input className="neu-input w-full px-4 py-2.5 text-sm"
                 value={form.tags} onChange={set('tags')} placeholder="adj, B2, daily" />
             </div>
           </div>
 
           <div>
-            <label className={labelCls}>Definition (EN)</label>
+            <label className={labelCls}>{t('aw.definitionEn')}</label>
             <textarea className="neu-input w-full px-4 py-2.5 text-sm resize-none"
-              rows={2} value={form.definition} onChange={set('definition')} placeholder="English definition..." />
+              rows={2} value={form.definition} onChange={set('definition')} placeholder={t('aw.englishDef')} />
           </div>
 
           <div>
-            <label className={labelCls}>释义 (中文)</label>
+            <label className={labelCls}>{t('aw.definitionZh')}</label>
             <textarea className="neu-input w-full px-4 py-2.5 text-sm resize-none"
-              rows={2} value={form.definitionZh} onChange={set('definitionZh')} placeholder="中文释义..." />
+              rows={2} value={form.definitionZh} onChange={set('definitionZh')} placeholder={t('aw.zhDef')} />
           </div>
 
           <div>
-            <label className={labelCls}>Example</label>
+            <label className={labelCls}>{t('aw.example')}</label>
             <textarea className="neu-input w-full px-4 py-2.5 text-sm resize-none"
-              rows={2} value={form.example} onChange={set('example')} placeholder="An example sentence..." />
+              rows={2} value={form.example} onChange={set('example')} placeholder={t('aw.exampleSentence')} />
           </div>
 
           <div>
-            <label className={labelCls}>Notes</label>
+            <label className={labelCls}>{t('aw.notes')}</label>
             <input className="neu-input w-full px-4 py-2.5 text-sm"
-              value={form.notes} onChange={set('notes')} placeholder="Extra notes" />
+              value={form.notes} onChange={set('notes')} placeholder={t('aw.extraNotes')} />
           </div>
         </div>
 

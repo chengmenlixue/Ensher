@@ -157,7 +157,7 @@ export default function App() {
           </div>
 
           <div className="px-4 pb-4">
-            <p className="text-[10px] text-gray-300">v0.2.0</p>
+            <p className="text-[10px] text-gray-300">v1.3.0</p>
           </div>
         </nav>
 

@@ -801,6 +801,7 @@ body {
   background: var(--neu-shadow-dark);
   border-radius: 3px;
 }
+#letter-sidebar::-webkit-scrollbar { display: none; }
 ::-webkit-scrollbar-thumb:hover { background: var(--neu-shadow-dark-deep); }
 
 /* ════════════════════════════════════

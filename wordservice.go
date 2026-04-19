@@ -24,9 +24,14 @@ type Word struct {
 	Notes          string  `json:"notes"`
 	Tags           string  `json:"tags"`
 	MasteryLevel   int     `json:"masteryLevel"`
+	Urgency        int     `json:"urgency"`
 	ReviewCount    int     `json:"reviewCount"`
 	CreatedAt      string  `json:"createdAt"`
 	LastReviewedAt string  `json:"lastReviewedAt"`
+	Etymology      string  `json:"etymology"`
+	Roots          string  `json:"roots"`
+	MemoryTip      string  `json:"memoryTip"`
+	RelatedWords   string  `json:"relatedWords"`
 }
 
 type ReviewSettings struct {
@@ -91,6 +96,13 @@ func (w *WordService) migrate() error {
 	}
 	// Add definition_zh column for existing DBs
 	_, _ = w.db.Exec(`ALTER TABLE words ADD COLUMN definition_zh TEXT DEFAULT ''`)
+	// Add urgency column for existing DBs (-1 = auto/computed)
+	_, _ = w.db.Exec(`ALTER TABLE words ADD COLUMN urgency INTEGER DEFAULT -1`)
+	// Add AI-Learn columns for existing DBs
+	_, _ = w.db.Exec(`ALTER TABLE words ADD COLUMN etymology TEXT DEFAULT ''`)
+	_, _ = w.db.Exec(`ALTER TABLE words ADD COLUMN roots TEXT DEFAULT ''`)
+	_, _ = w.db.Exec(`ALTER TABLE words ADD COLUMN memory_tip TEXT DEFAULT ''`)
+	_, _ = w.db.Exec(`ALTER TABLE words ADD COLUMN related_words TEXT DEFAULT ''`)
 	// Performance indexes for 100k+ word scale
 	_, _ = w.db.Exec(`CREATE INDEX IF NOT EXISTS idx_words_created_at ON words(created_at)`)
 	_, _ = w.db.Exec(`CREATE INDEX IF NOT EXISTS idx_words_mastery_level ON words(mastery_level)`)
@@ -273,19 +285,19 @@ func (w *WordService) AddWord(word, phonetic, definition, definitionZh, example,
 
 func (w *WordService) GetWordByName(name string) (*Word, error) {
 	row := w.db.QueryRow(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words WHERE word = ?`, name)
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words WHERE word = ?`, name)
 	return w.scanWord(row)
 }
 
 func (w *WordService) GetWord(id int64) (*Word, error) {
 	row := w.db.QueryRow(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words WHERE id = ?`, id)
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words WHERE id = ?`, id)
 	return w.scanWord(row)
 }
 
 func (w *WordService) GetAllWords() ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words ORDER BY created_at DESC`)
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +307,7 @@ func (w *WordService) GetAllWords() ([]Word, error) {
 
 func (w *WordService) SearchWords(query string) ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words
 		WHERE word LIKE ? OR definition LIKE ? OR tags LIKE ? OR definition_zh LIKE ?
 		ORDER BY created_at DESC`,
 		"%"+query+"%", "%"+query+"%", "%"+query+"%", "%"+query+"%",
@@ -309,7 +321,7 @@ func (w *WordService) SearchWords(query string) ([]Word, error) {
 
 func (w *WordService) GetWordsAlphabetical() ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words ORDER BY word COLLATE NOCASE ASC`)
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words ORDER BY word COLLATE NOCASE ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +331,7 @@ func (w *WordService) GetWordsAlphabetical() ([]Word, error) {
 
 func (w *WordService) GetWordsByDate() ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words ORDER BY created_at DESC`)
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +403,7 @@ func (w *WordService) GetWordPage(sort string, page, pageSize int, search, maste
 	}
 
 	offset := (page - 1) * pageSize
-	query := "SELECT id, word, phonetic, definition, definition_zh, example, notes, tags, mastery_level, review_count, created_at, last_reviewed_at FROM words " +
+	query := "SELECT id, word, phonetic, definition, definition_zh, example, notes, tags, mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words " +
 		where + " " + orderBy + " LIMIT ? OFFSET ?"
 	queryArgs := append(args, pageSize, offset)
 
@@ -517,7 +529,7 @@ func (w *WordService) GetMasteryCounts() (map[string]int, error) {
 
 func (w *WordService) GetWordsByEbbinghaus() ([]Word, error) {
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words
 		ORDER BY
 			((5 - mastery_level) * 10 + CAST(julianday('now') - julianday(COALESCE(NULLIF(last_reviewed_at, ''), 'now')) AS INTEGER)) DESC,
 			mastery_level ASC`)
@@ -526,6 +538,17 @@ func (w *WordService) GetWordsByEbbinghaus() ([]Word, error) {
 	}
 	defer rows.Close()
 	return w.scanWords(rows)
+}
+
+func (w *WordService) SetUrgency(id int64, urgency int) error {
+	_, err := w.db.Exec(`UPDATE words SET urgency = ? WHERE id = ?`, urgency, id)
+	return err
+}
+
+func (w *WordService) SaveAILearn(id int64, etymology, roots, memoryTip, relatedWords string) error {
+	_, err := w.db.Exec(`UPDATE words SET etymology = ?, roots = ?, memory_tip = ?, related_words = ? WHERE id = ?`,
+		etymology, roots, memoryTip, relatedWords, id)
+	return err
 }
 
 func (w *WordService) DeleteWord(id int64) error {
@@ -553,7 +576,7 @@ func (w *WordService) GetWordsForReview() ([]Word, error) {
 		settings = &ReviewSettings{DailyLimit: 20}
 	}
 	rows, err := w.db.Query(`SELECT id, word, phonetic, definition, definition_zh, example, notes, tags,
-		mastery_level, review_count, created_at, last_reviewed_at FROM words
+		mastery_level, urgency, review_count, created_at, last_reviewed_at, etymology, roots, memory_tip, related_words FROM words
 		WHERE mastery_level < 5
 		ORDER BY last_reviewed_at ASC, RANDOM()
 		LIMIT ?`, settings.DailyLimit)
@@ -616,14 +639,26 @@ func (w *WordService) GetStats() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	// Urgency distribution: count words needing review (urgency 0-1)
+	// urgency = mastery_level, minus 2 if >7 days unreviewed, minus 1 if >3 days
+	var needReview int
+	w.db.QueryRow(`
+		SELECT COUNT(*) FROM words WHERE
+			mastery_level = 0 OR
+			mastery_level <= 1 OR
+			(mastery_level <= 2 AND julianday('now') - julianday(COALESCE(NULLIF(last_reviewed_at, ''), 'now')) > 3) OR
+			(mastery_level <= 4 AND julianday('now') - julianday(COALESCE(NULLIF(last_reviewed_at, ''), 'now')) > 7)
+	`).Scan(&needReview)
+
 	return map[string]interface{}{
-		"total":    total,
-		"mastered": mastered,
-		"learning": learning,
-		"newWords": newWords,
-		"today":    todayCount,
-		"reviewed": reviewed,
-		"aiCount":  aiCount,
+		"total":      total,
+		"mastered":   mastered,
+		"learning":   learning,
+		"newWords":   newWords,
+		"today":      todayCount,
+		"reviewed":   reviewed,
+		"aiCount":    aiCount,
+		"needReview": needReview,
 	}, nil
 }
 
@@ -632,7 +667,8 @@ func (w *WordService) scanWord(row *sql.Row) (*Word, error) {
 	var createdAt, lastReviewed sql.NullString
 	err := row.Scan(&word.ID, &word.Word, &word.Phonetic, &word.Definition, &word.DefinitionZh,
 		&word.Example, &word.Notes, &word.Tags,
-		&word.MasteryLevel, &word.ReviewCount, &createdAt, &lastReviewed)
+		&word.MasteryLevel, &word.Urgency, &word.ReviewCount, &createdAt, &lastReviewed,
+		&word.Etymology, &word.Roots, &word.MemoryTip, &word.RelatedWords)
 	if err != nil {
 		return nil, err
 	}
@@ -652,7 +688,8 @@ func (w *WordService) scanWords(rows *sql.Rows) ([]Word, error) {
 		var createdAt, lastReviewed sql.NullString
 		err := rows.Scan(&word.ID, &word.Word, &word.Phonetic, &word.Definition, &word.DefinitionZh,
 			&word.Example, &word.Notes, &word.Tags,
-			&word.MasteryLevel, &word.ReviewCount, &createdAt, &lastReviewed)
+			&word.MasteryLevel, &word.Urgency, &word.ReviewCount, &createdAt, &lastReviewed,
+			&word.Etymology, &word.Roots, &word.MemoryTip, &word.RelatedWords)
 		if err != nil {
 			return words, err
 		}

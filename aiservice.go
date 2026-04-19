@@ -39,6 +39,14 @@ type AIDefineResult struct {
 	Advice     string `json:"advice"`      // Learning advice in Chinese
 }
 
+// AIWordLearnResult holds etymology and learning info for a word.
+type AIWordLearnResult struct {
+	Etymology    string `json:"etymology"`    // Word evolution history (Chinese)
+	Roots        string `json:"roots"`         // Word root breakdown (Chinese)
+	MemoryTip    string `json:"memoryTip"`     // Memorization technique (Chinese)
+	RelatedWords string `json:"relatedWords"`  // Same-root related words
+}
+
 // isChineseText returns true if the string contains Chinese characters.
 func isChineseText(s string) bool {
 	for _, r := range s {
@@ -76,6 +84,23 @@ func buildLookupPrompt(input string) string {
 }`, input)
 }
 
+// buildLearnPrompt returns the AI prompt for word etymology and learning tips.
+func buildLearnPrompt(word, definition, definitionZh string) string {
+	context := ""
+	if definition != "" || definitionZh != "" {
+		context = fmt.Sprintf("\n\n参考信息：\n- 英文释义：%s\n- 中文释义：%s", definition, definitionZh)
+	}
+	return fmt.Sprintf(`你是一位资深的英语词汇学家和语言教师。请为单词 "%s" 进行深度解析。%s
+
+请返回纯JSON（不要任何markdown格式或额外说明），格式如下：
+{
+  "etymology": "该单词的完整演变历史，从原始语源到现代英语的变化过程，包含关键演变节点和时间，用中文叙述，150字以内",
+  "roots": "词根词缀拆解分析，如：前缀xxx表示...，词根xxx表示...，后缀xxx表示...，用中文清晰说明，100字以内",
+  "memoryTip": "一个巧妙有效的记忆技巧，可以用谐音、联想、图像化等方法，用中文生动描述，80字以内",
+  "relatedWords": "列出3-5个同词根的相关单词及其简短中文释义，格式：word(释义)，用逗号分隔"
+}`, word, context)
+}
+
 // AIService is the Wails service exposing AI-related methods.
 type AIService struct{}
 
@@ -98,6 +123,10 @@ func (a *AIService) LookupWordWithAI(word string) (*AILookupResult, error) {
 
 func (a *AIService) JudgeAnswerWithAI(wordID int64, userAnswer, wordStr string) (*AIDefineResult, error) {
 	return JudgeAnswerWithAI(wordID, userAnswer, wordStr)
+}
+
+func (a *AIService) LearnWordWithAI(word, definition, definitionZh string) (*AIWordLearnResult, error) {
+	return LearnWordWithAI(word, definition, definitionZh)
 }
 
 func configDir() (string, error) {
@@ -291,6 +320,28 @@ func JudgeAnswerWithAI(wordID int64, userAnswer, wordStr string) (*AIDefineResul
 		return judgeWithAtomGit(wordID, userAnswer, wordStr, cfg.APIKey, cfg.ModelName)
 	case "zhipu":
 		return judgeWithZhipu(wordID, userAnswer, wordStr, cfg.APIKey, cfg.ModelName)
+	default:
+		return nil, fmt.Errorf("unsupported AI provider: %s", settings.Provider)
+	}
+}
+
+// LearnWordWithAI calls the configured AI provider to analyze word etymology and learning tips.
+func LearnWordWithAI(word, definition, definitionZh string) (*AIWordLearnResult, error) {
+	settings, err := LoadAISettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AI settings: %w", err)
+	}
+	cfg, ok := settings.Providers[settings.Provider]
+	if !ok || cfg.APIKey == "" {
+		return nil, fmt.Errorf("AI API key not configured for %s. Please set it in Settings.", settings.Provider)
+	}
+	switch settings.Provider {
+	case "minimax":
+		return learnWithMiniMax(word, definition, definitionZh, cfg.APIKey, cfg.ModelName)
+	case "atomgit":
+		return learnWithAtomGit(word, definition, definitionZh, cfg.APIKey, cfg.ModelName)
+	case "zhipu":
+		return learnWithZhipu(word, definition, definitionZh, cfg.APIKey, cfg.ModelName)
 	default:
 		return nil, fmt.Errorf("unsupported AI provider: %s", settings.Provider)
 	}
@@ -628,5 +679,134 @@ func judgeWithZhipu(wordID int64, userAnswer, wordStr, apiKey, modelName string)
 	if err := json.Unmarshal([]byte(content), &r); err != nil {
 		return nil, fmt.Errorf("AI returned invalid JSON: %s", content)
 	}
+	return &r, nil
+}
+
+// ─── AI Learn: etymology & learning tips ──────────────────────────────
+
+func learnWithMiniMax(word, definition, definitionZh, apiKey, modelName string) (*AIWordLearnResult, error) {
+	prompt := buildLearnPrompt(word, definition, definitionZh)
+	body, _ := json.Marshal(map[string]interface{}{
+		"model": modelName,
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are an expert etymologist and language teacher. Always respond with valid JSON only."},
+			{"role": "user", "content": prompt},
+		},
+	})
+	req, err := http.NewRequest("POST", "https://api.minimaxi.com/v1/text/chatcompletion_v2", bytes.NewReader(body))
+	if err != nil { return nil, err }
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil { return nil, fmt.Errorf("network error: %w", err) }
+	defer resp.Body.Close()
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		BaseResp struct {
+			StatusCode int    `json:"statusCode"`
+			StatusMsg  string `json:"statusMsg"`
+		} `json:"base_resp"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return nil, fmt.Errorf("failed to parse response: %w", err) }
+	if result.BaseResp.StatusCode != 0 { return nil, fmt.Errorf("MiniMax API error: %s", result.BaseResp.StatusMsg) }
+	if len(result.Choices) == 0 { return nil, fmt.Errorf("no response from AI") }
+	content := strings.TrimSpace(result.Choices[0].Message.Content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+	content = fixJSONContent(content)
+	var r AIWordLearnResult
+	if err := json.Unmarshal([]byte(content), &r); err != nil { return nil, fmt.Errorf("AI returned invalid JSON: %s", content) }
+	return &r, nil
+}
+
+func learnWithAtomGit(word, definition, definitionZh, apiKey, modelName string) (*AIWordLearnResult, error) {
+	prompt := buildLearnPrompt(word, definition, definitionZh)
+	body, _ := json.Marshal(map[string]interface{}{
+		"model": modelName,
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are an expert etymologist and language teacher. Always respond with valid JSON only."},
+			{"role": "user", "content": prompt},
+		},
+		"max_tokens": 1024, "temperature": 0.7,
+	})
+	req, err := http.NewRequest("POST", "https://api-ai.gitcode.com/v1/chat/completions", bytes.NewReader(body))
+	if err != nil { return nil, err }
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil { return nil, fmt.Errorf("network error: %w", err) }
+	defer resp.Body.Close()
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return nil, fmt.Errorf("failed to parse response: %w", err) }
+	if result.Error.Message != "" { return nil, fmt.Errorf("AtomGit API error: %s", result.Error.Message) }
+	if len(result.Choices) == 0 { return nil, fmt.Errorf("no response from AI") }
+	content := strings.TrimSpace(result.Choices[0].Message.Content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+	content = fixJSONContent(content)
+	var r AIWordLearnResult
+	if err := json.Unmarshal([]byte(content), &r); err != nil { return nil, fmt.Errorf("AI returned invalid JSON: %s", content) }
+	return &r, nil
+}
+
+func learnWithZhipu(word, definition, definitionZh, apiKey, modelName string) (*AIWordLearnResult, error) {
+	prompt := buildLearnPrompt(word, definition, definitionZh)
+	body, _ := json.Marshal(map[string]interface{}{
+		"model": modelName,
+		"messages": []map[string]string{
+			{"role": "system", "content": "You are an expert etymologist and language teacher. Always respond with valid JSON only."},
+			{"role": "user", "content": prompt},
+		},
+	})
+	req, err := http.NewRequest("POST", "https://open.bigmodel.cn/api/paas/v4/chat/completions", bytes.NewReader(body))
+	if err != nil { return nil, err }
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil { return nil, fmt.Errorf("network error: %w", err) }
+	defer resp.Body.Close()
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error struct {
+			Message string `json:"message"`
+			Code    string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil { return nil, fmt.Errorf("failed to parse response: %w", err) }
+	if result.Error.Message != "" { return nil, fmt.Errorf("Zhipu API error: %s", result.Error.Message) }
+	if len(result.Choices) == 0 { return nil, fmt.Errorf("no response from AI") }
+	content := strings.TrimSpace(result.Choices[0].Message.Content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	content = strings.TrimSpace(content)
+	content = fixJSONContent(content)
+	var r AIWordLearnResult
+	if err := json.Unmarshal([]byte(content), &r); err != nil { return nil, fmt.Errorf("AI returned invalid JSON: %s", content) }
 	return &r, nil
 }

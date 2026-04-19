@@ -256,6 +256,7 @@ export default function QuickLookupWidget() {
               setResult({
                 from: 'db', word: w.word, phonetic: w.phonetic,
                 definition: w.definition, definitionZh: w.definitionZh, example: w.example,
+                learnResult: (w.etymology || w.roots || w.memoryTip || w.relatedWords) ? { etymology: w.etymology, roots: w.roots, memoryTip: w.memoryTip, relatedWords: w.relatedWords } : null,
               });
             } else {
               setResults(dbResults);
@@ -273,6 +274,7 @@ export default function QuickLookupWidget() {
             setResult({
               from: 'db', word: dbWord.word, phonetic: dbWord.phonetic,
               definition: dbWord.definition, definitionZh: dbWord.definitionZh, example: dbWord.example,
+              learnResult: (dbWord.etymology || dbWord.roots || dbWord.memoryTip || dbWord.relatedWords) ? { etymology: dbWord.etymology, roots: dbWord.roots, memoryTip: dbWord.memoryTip, relatedWords: dbWord.relatedWords } : null,
             });
             return;
           }
@@ -323,10 +325,21 @@ export default function QuickLookupWidget() {
       if (isChinese(query) && !definitionZh.includes(query)) {
         definitionZh = definitionZh ? `${definitionZh}；${query}` : query;
       }
-      await WordService.AddWord(
+      const saved = await WordService.AddWord(
         result.word || '', result.phonetic || '', result.definition || '',
         definitionZh, result.example || '', '', ''
       );
+      // Trigger AI-Learn in background and save to DB
+      if (saved && saved.id) {
+        AIService.LearnWordWithAI(saved.word, saved.definition || '', saved.definitionZh || '')
+          .then(learnResult => {
+            if (learnResult) {
+              WordService.SaveAILearn(saved.id, learnResult.etymology || '', learnResult.roots || '', learnResult.memoryTip || '', learnResult.relatedWords || '');
+              setResult(prev => prev && typeof prev === 'object' ? { ...prev, saved: true, learnResult } : prev);
+            }
+          })
+          .catch(() => {});
+      }
       setResult(prev => prev && typeof prev === 'object' ? { ...prev, saved: true } : prev);
     } catch (err) {
       console.error('QuickLookup: save failed', err);
@@ -502,6 +515,55 @@ export default function QuickLookupWidget() {
             )}
             {result.example && (
               <p className="text-xs italic pl-3 leading-relaxed" style={{ color: s.textMuted, borderLeft: `2px solid ${s.border}` }}>"{result.example}"</p>
+            )}
+            {/* AI-Learn panel */}
+            {result.learnResult && (result.learnResult.etymology || result.learnResult.roots || result.learnResult.memoryTip || result.learnResult.relatedWords) && (
+              <div className="mt-1 pt-3 space-y-2.5" style={{ borderTop: `1px solid ${s.border}` }}>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold" style={{ color: s.accent }}>Deep Learn</span>
+                  <span className="text-[9px]" style={{ color: s.textMuted }}>— AI</span>
+                </div>
+                {result.learnResult.etymology && (
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#fbbf24' }} />
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#d97706' }}>词源</span>
+                    </div>
+                    <p className="text-xs leading-relaxed pl-2" style={{ color: s.textSecondary }}>{result.learnResult.etymology}</p>
+                  </div>
+                )}
+                {result.learnResult.roots && (
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#38bdf8' }} />
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#0284c7' }}>词根</span>
+                    </div>
+                    <p className="text-xs leading-relaxed pl-2" style={{ color: s.textSecondary }}>{result.learnResult.roots}</p>
+                  </div>
+                )}
+                {result.learnResult.memoryTip && (
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#a78bfa' }} />
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#7c3aed' }}>记忆</span>
+                    </div>
+                    <p className="text-xs leading-relaxed pl-2" style={{ color: s.textSecondary }}>{result.learnResult.memoryTip}</p>
+                  </div>
+                )}
+                {result.learnResult.relatedWords && (
+                  <div>
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="inline-block w-0.5 h-2.5 rounded-full" style={{ background: '#34d399' }} />
+                      <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#059669' }}>同根</span>
+                    </div>
+                    <div className="flex gap-1 flex-wrap pl-2">
+                      {result.learnResult.relatedWords.split(/[,，]/).map((rw, i) => (
+                        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: `${s.accent}12`, color: s.textSecondary }}>{rw.trim()}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
